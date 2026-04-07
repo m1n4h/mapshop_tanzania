@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/minah/Pictures/projects/mapshop_tanzania/linux"
+    "cmake.sourceDirectory": "/home/minah/Pictures/projects/mapshop_tanzania/linux",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }
