@@ -1,0 +1,87 @@
+# Get current user
+query GetMe {
+  me {
+    id
+    email
+    username
+    phoneNumber
+    userType
+    isVerified
+  }
+}
+
+# Get nearby shops
+query GetNearbyShops($lat: Float!, $lng: Float!, $radius: Float) {
+  nearbyShops(lat: $lat, lng: $lng, radius: $radius) {
+    id
+    name
+    description
+    address
+    latitude
+    longitude
+    rating
+    isOpen
+    distance
+    hours {
+      day
+      dayName
+      openTime
+      closeTime
+    }
+  }
+}
+
+# Search products
+query SearchProducts($search: String, $category: String, $minPrice: Float, $maxPrice: Float) {
+  products(search: $search, category: $category, minPrice: $minPrice, maxPrice: $maxPrice) {
+    id
+    name
+    description
+    price
+    finalPrice
+    stock
+    unit
+    shopName
+    categoryName
+    images {
+      image
+      isMain
+    }
+  }
+}
+
+# Get my orders
+query GetMyOrders {
+  myOrders {
+    orderId
+    status
+    total
+    createdAt
+    shopName
+    items {
+      id
+      quantity
+      price
+      total
+      productName
+    }
+  }
+}
+
+# Get dashboard stats
+query GetDashboardStats {
+  dashboardStats
+}
+
+# Get notifications
+query GetNotifications($unreadOnly: Boolean) {
+  notifications(unreadOnly: $unreadOnly) {
+    id
+    title
+    message
+    notificationType
+    isRead
+    createdAt
+  }
+  unreadNotificationsCount
+}

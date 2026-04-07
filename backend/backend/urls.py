@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/deliveries/', include('apps.deliveries.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     
+    # ✅ GraphQL endpoint
+    # path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=True))),
     # API Documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

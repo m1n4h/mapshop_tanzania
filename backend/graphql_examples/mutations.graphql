@@ -1,0 +1,84 @@
+# Register user
+mutation Register($email: String!, $username: String!, $phoneNumber: String!, $password: String!, $userType: String) {
+  register(email: $email, username: $username, phoneNumber: $phoneNumber, password: $password, userType: $userType) {
+    success
+    message
+    token
+    user {
+      id
+      email
+      username
+      userType
+    }
+  }
+}
+
+# Login user
+mutation Login($email: String!, $password: String!) {
+  login(email: $email, password: $password) {
+    success
+    message
+    token
+    refreshToken
+    user {
+      id
+      email
+      username
+      userType
+    }
+  }
+}
+
+# Create order
+mutation CreateOrder($shopId: Int!, $items: JSONString!, $deliveryAddress: String!, $latitude: Float!, $longitude: Float!, $paymentMethod: String!) {
+  createOrder(shopId: $shopId, items: $items, deliveryAddress: $deliveryAddress, latitude: $latitude, longitude: $longitude, paymentMethod: $paymentMethod) {
+    success
+    message
+    order {
+      orderId
+      status
+      total
+      createdAt
+    }
+  }
+}
+
+# Update order status
+mutation UpdateOrderStatus($orderId: String!, $status: String!) {
+  updateOrderStatus(orderId: $orderId, status: $status) {
+    success
+    message
+    order {
+      orderId
+      status
+    }
+  }
+}
+
+# Create shop (for sellers)
+mutation CreateShop($name: String!, $description: String!, $latitude: Float!, $longitude: Float!, $address: String!, $phoneNumber: String!, $email: String!) {
+  createShop(name: $name, description: $description, latitude: $latitude, longitude: $longitude, address: $address, phoneNumber: $phoneNumber, email: $email) {
+    success
+    message
+    shop {
+      id
+      name
+      address
+      isOpen
+    }
+  }
+}
+
+# Create product
+mutation CreateProduct($shopId: Int!, $categoryId: Int!, $name: String!, $description: String!, $price: Float!, $stock: Int!, $unit: String!) {
+  createProduct(shopId: $shopId, categoryId: $categoryId, name: $name, description: $description, price: $price, stock: $stock, unit: $unit) {
+    success
+    message
+    product {
+      id
+      name
+      price
+      stock
+    }
+  }
+}

@@ -33,12 +33,13 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
     'django_filters',
-    'drf_yasg',
     'channels',
+    'drf_yasg',
     'ckeditor',
     'import_export',
     'debug_toolbar',
     'django_extensions',
+    'graphene_django',
     
     # Local apps
     'apps.accounts',
@@ -180,6 +181,24 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
+# GraphQL settings
+GRAPHENE = {
+    'SCHEMA': 'backend.schema.schema',
+    'MIDDLEWARE': [
+        'graphql_jwt.middleware.JSONWebTokenMiddleware',
+    ],
+}
+
+AUTHENTICATION_BACKENDS = [
+    'graphql_jwt.backends.JSONWebTokenBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Create necessary directories if they don't exist
+os.makedirs(BASE_DIR / 'static', exist_ok=True)
+os.makedirs(BASE_DIR / 'media', exist_ok=True)
+
 
 # Celery settings
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
