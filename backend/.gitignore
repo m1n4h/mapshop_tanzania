@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.log
+*.pot
+*.pyc
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+*.lock
+*.iml
+*.iws
+.idea/
+.vscode/
+.svn/
+*.swp
+*.swo
+*~
+.DS_Store
+*.generated.dart
+*.freezed.dart
+*.g.dart
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Node (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Secrets
+*.pem
+*.key
+*.crt
