@@ -12,11 +12,18 @@ UserModel = get_user_model()
 
 # ==================== Accounts Types ====================
 class UserType(DjangoObjectType):
+    latitude = graphene.Float()
+    longitude = graphene.Float()
+
     class Meta:
         model = UserModel
-        fields = ('id', 'email', 'username', 'phone_number', 'user_type', 
-                 'profile_picture', 'latitude', 'longitude', 'address', 
-                 'is_verified', 'date_joined', 'last_login')
+        exclude = ('location',)
+
+    def resolve_latitude(self, info):
+        return self.location.y if self.location else None
+
+    def resolve_longitude(self, info):
+        return self.location.x if self.location else None
 
 class UserSessionType(DjangoObjectType):
     class Meta:
@@ -38,13 +45,21 @@ class ShopHoursType(DjangoObjectType):
 class ShopType(DjangoObjectType):
     distance = graphene.Float()
     hours = graphene.List(ShopHoursType)
-    
+    latitude = graphene.Float()
+    longitude = graphene.Float()
+
     class Meta:
         model = Shop
-        fields = '__all__'
-    
+        exclude = ('location',)
+
     def resolve_hours(self, info):
         return self.hours.all()
+
+    def resolve_latitude(self, info):
+        return self.location.y if self.location else None
+
+    def resolve_longitude(self, info):
+        return self.location.x if self.location else None
 
 # ==================== Product Types ====================
 class CategoryType(DjangoObjectType):
@@ -123,18 +138,31 @@ class OrderType(DjangoObjectType):
 
 # ==================== Delivery Types ====================
 class DeliveryTrackingType(DjangoObjectType):
+    latitude = graphene.Float()
+    longitude = graphene.Float()
+
     class Meta:
         model = DeliveryTracking
-        fields = '__all__'
+        exclude = ('location',)
+
+    def resolve_latitude(self, info):
+        return self.location.y if self.location else None
+
+    def resolve_longitude(self, info):
+        return self.location.x if self.location else None
 
 class DeliveryType(DjangoObjectType):
     order_id = graphene.String()
     rider_name = graphene.String()
     tracking_history = graphene.List(DeliveryTrackingType)
+    pickup_latitude = graphene.Float()
+    pickup_longitude = graphene.Float()
+    delivery_latitude = graphene.Float()
+    delivery_longitude = graphene.Float()
     
     class Meta:
         model = Delivery
-        fields = '__all__'
+        exclude = ('pickup_location', 'delivery_location',)
     
     def resolve_order_id(self, info):
         return self.order.order_id
@@ -144,6 +172,18 @@ class DeliveryType(DjangoObjectType):
     
     def resolve_tracking_history(self, info):
         return self.tracking.all()
+
+    def resolve_pickup_latitude(self, info):
+        return self.pickup_location.y if self.pickup_location else None
+
+    def resolve_pickup_longitude(self, info):
+        return self.pickup_location.x if self.pickup_location else None
+
+    def resolve_delivery_latitude(self, info):
+        return self.delivery_location.y if self.delivery_location else None
+
+    def resolve_delivery_longitude(self, info):
+        return self.delivery_location.x if self.delivery_location else None
 
 # ==================== Notification Types ====================
 class NotificationType(DjangoObjectType):

@@ -1,3 +1,5 @@
+from graphene_django.views import GraphQLView
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -29,7 +31,7 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     
     # ✅ GraphQL endpoint
-    # path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=True))),
+    path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=True))),
     # API Documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

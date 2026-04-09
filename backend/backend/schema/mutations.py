@@ -1,5 +1,9 @@
 import graphene
+import random
+import string
 from django.contrib.auth import get_user_model
+from django.contrib.gis.geos import Point
+from django.utils import timezone
 from graphql_jwt.shortcuts import get_token, create_refresh_token
 from graphql_jwt.decorators import login_required
 from .types import *
@@ -7,6 +11,47 @@ from .types import *
 UserModel = get_user_model()
 
 # ==================== Auth Mutations ====================
+class TokenAuthMutation(graphene.Mutation):
+    class Arguments:
+        email = graphene.String(required=True)
+        username = graphene.String(required=True)
+        provider = graphene.String(required=True)
+        social_id = graphene.String(required=True)
+        phone_number = graphene.String()
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    token = graphene.String()
+    refresh_token = graphene.String()
+    user = graphene.Field(UserType)
+
+    def mutate(self, info, email, username, provider, social_id, phone_number=None):
+        user = UserModel.objects.filter(email=email).first()
+        if not user:
+            if not phone_number:
+                phone_number = '+000' + ''.join(random.choices(string.digits, k=10))
+
+            username = username or email.split('@')[0]
+            user = UserModel.objects.create_user(
+                email=email,
+                username=username,
+                phone_number=phone_number,
+                password=UserModel.objects.make_random_password(),
+                user_type='BUYER'
+            )
+            user.is_verified = True
+            user.save()
+
+        token = get_token(user)
+        refresh_token = create_refresh_token(user)
+        return TokenAuthMutation(
+            success=True,
+            message="Login successful",
+            token=token,
+            refresh_token=refresh_token,
+            user=user
+        )
+
 class RegisterMutation(graphene.Mutation):
     class Arguments:
         email = graphene.String(required=True)
@@ -59,6 +104,93 @@ class LoginMutation(graphene.Mutation):
         
         return LoginMutation(success=True, message="Login successful", user=user, token=token, refresh_token=refresh_token)
 
+class SendOTPMutation(graphene.Mutation):
+    class Arguments:
+        email = graphene.String()
+        phone_number = graphene.String()
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    otp = graphene.String()
+    user = graphene.Field(UserType)
+
+    def mutate(self, info, email=None, phone_number=None):
+        if not email and not phone_number:
+            return SendOTPMutation(success=False, message="Provide email or phone number to receive OTP.")
+
+        user = None
+        if email:
+            user = UserModel.objects.filter(email=email).first()
+        if not user and phone_number:
+            user = UserModel.objects.filter(phone_number=phone_number).first()
+
+        if not user:
+            if not email:
+                email = f'guest_{phone_number}@mapshoptanzania.local'
+            if not phone_number:
+                phone_number = '+000' + ''.join(random.choices(string.digits, k=10))
+            username = email.split('@')[0]
+            user = UserModel.objects.create_user(
+                email=email,
+                username=username,
+                phone_number=phone_number,
+                password=UserModel.objects.make_random_password(),
+                user_type='BUYER'
+            )
+
+        otp = ''.join(random.choices(string.digits, k=4))
+        user.otp_code = otp
+        user.otp_created_at = timezone.now()
+        user.save()
+
+        return SendOTPMutation(success=True, message="OTP sent successfully", otp=otp, user=user)
+
+class VerifyOTPMutation(graphene.Mutation):
+    class Arguments:
+        email = graphene.String()
+        phone_number = graphene.String()
+        otp_code = graphene.String(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    token = graphene.String()
+    refresh_token = graphene.String()
+    user = graphene.Field(UserType)
+
+    def mutate(self, info, otp_code, email=None, phone_number=None):
+        if not email and not phone_number:
+            return VerifyOTPMutation(success=False, message="Provide email or phone number to verify OTP.")
+
+        user = None
+        if email:
+            user = UserModel.objects.filter(email=email).first()
+        if not user and phone_number:
+            user = UserModel.objects.filter(phone_number=phone_number).first()
+
+        if not user or not user.otp_code:
+            return VerifyOTPMutation(success=False, message="Invalid OTP or user not found.")
+
+        if user.otp_code != otp_code:
+            return VerifyOTPMutation(success=False, message="Invalid OTP.")
+
+        if user.otp_created_at and (timezone.now() - user.otp_created_at).seconds > 300:
+            return VerifyOTPMutation(success=False, message="OTP has expired.")
+
+        user.is_verified = True
+        user.otp_code = None
+        user.otp_created_at = None
+        user.save()
+
+        token = get_token(user)
+        refresh_token = create_refresh_token(user)
+        return VerifyOTPMutation(
+            success=True,
+            message="OTP verified successfully",
+            token=token,
+            refresh_token=refresh_token,
+            user=user
+        )
+
 # ==================== Shop Mutations ====================
 class CreateShopMutation(graphene.Mutation):
     class Arguments:
@@ -80,7 +212,10 @@ class CreateShopMutation(graphene.Mutation):
         if user.user_type != 'SELLER':
             return CreateShopMutation(success=False, message="Only sellers can create shops")
         
-        shop = Shop.objects.create(seller=user, **kwargs)
+        latitude = kwargs.pop('latitude')
+        longitude = kwargs.pop('longitude')
+        location = Point(longitude, latitude)
+        shop = Shop.objects.create(seller=user, location=location, **kwargs)
         return CreateShopMutation(success=True, message="Shop created successfully", shop=shop)
 
 class UpdateShopMutation(graphene.Mutation):
@@ -106,6 +241,14 @@ class UpdateShopMutation(graphene.Mutation):
             if shop.seller != info.context.user and info.context.user.user_type != 'ADMIN':
                 return UpdateShopMutation(success=False, message="Permission denied")
             
+            latitude = kwargs.pop('latitude', None)
+            longitude = kwargs.pop('longitude', None)
+            if latitude is not None or longitude is not None:
+                current_location = shop.location
+                lon = longitude if longitude is not None else current_location.x
+                lat = latitude if latitude is not None else current_location.y
+                shop.location = Point(lon, lat)
+
             for key, value in kwargs.items():
                 if value is not None:
                     setattr(shop, key, value)
@@ -236,6 +379,9 @@ class Mutation(graphene.ObjectType):
     # Auth
     register = RegisterMutation.Field()
     login = LoginMutation.Field()
+    tokenAuth = TokenAuthMutation.Field()
+    sendOTP = SendOTPMutation.Field()
+    verifyOTP = VerifyOTPMutation.Field()
     
     # Shop
     create_shop = CreateShopMutation.Field()

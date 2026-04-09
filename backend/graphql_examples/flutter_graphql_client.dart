@@ -3,7 +3,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 
 class GraphQLService {
   static final HttpLink _httpLink = HttpLink(
-    'http:192.168.0.213/',
+    'http:192.168.0.213:8000',
   );
 
   static ValueNotifier<GraphQLClient> getClient() {
@@ -110,6 +110,9 @@ class GraphQLMutations {
           email
           username
           userType
+          phonenumber
+          password
+          
         }
       }
     }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mapshop_tanzania/provider/auth_provider.dart';
+import 'package:provider/provider.dart';
+
+import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -15,36 +18,43 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String _userType = 'BUYER';
-  bool _isLoading = false;
   bool _obscurePassword = true;
 
   Future<void> _handleSignUp() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      
-      await Future.delayed(const Duration(seconds: 1));
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', true);
-      await prefs.setString('userName', _nameController.text);
-      await prefs.setString('userEmail', _emailController.text);
-      await prefs.setString('userPassword', _passwordController.text);
-      await prefs.setString('userPhone', _phoneController.text);
-      await prefs.setString('userType', _userType);
-      
-      if (context.mounted) {
-        // Navigate based on user type
-        if (_userType == 'SELLER') {
-          Navigator.pushReplacementNamed(context, '/seller_inventory');
-        } else {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.register(
+        email: _emailController.text.trim(),
+        username: _nameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        password: _passwordController.text,
+        userType: _userType,
+      );
+
+      if (success && mounted) {
+        // Navigate to OTP verification
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created! Please verify OTP sent to your email/phone'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/signin');
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.errorMessage ?? 'Registration failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -59,7 +69,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(height: 16),
-              
               Center(
                 child: Column(
                   children: [
@@ -117,9 +126,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ],
                 ),
               ),
-              
               const SizedBox(height: 32),
-              
               Form(
                 key: _formKey,
                 child: Column(
@@ -136,9 +143,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                       ],
                     ),
-                    
                     const SizedBox(height: 24),
-                    
                     Text(
                       'FULL NAME',
                       style: TextStyle(
@@ -170,9 +175,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       validator: (value) => value?.isEmpty ?? true ? 'Please enter your name' : null,
                     ),
-                    
                     const SizedBox(height: 20),
-                    
                     Text(
                       'PHONE NUMBER',
                       style: TextStyle(
@@ -205,9 +208,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       keyboardType: TextInputType.phone,
                       validator: (value) => value?.isEmpty ?? true ? 'Please enter phone number' : null,
                     ),
-                    
                     const SizedBox(height: 20),
-                    
                     Text(
                       'EMAIL ADDRESS',
                       style: TextStyle(
@@ -244,9 +245,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         return null;
                       },
                     ),
-                    
                     const SizedBox(height: 20),
-                    
                     Text(
                       'PASSWORD',
                       style: TextStyle(
@@ -293,40 +292,37 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ],
                 ),
               ),
-              
               const SizedBox(height: 32),
-              
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleSignUp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              if (authProvider.isLoading)
+                const Center(child: CircularProgressIndicator())
+              else
+                ElevatedButton(
+                  onPressed: _handleSignUp,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    minimumSize: const Size(double.infinity, 52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Create Account',
-                            style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.arrow_forward,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Create Account',
+                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
                       ),
-              ),
-              
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 24),
-              
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -338,9 +334,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, '/signin');
                     },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                    ),
                     child: Text(
                       'Sign In',
                       style: TextStyle(
@@ -351,9 +344,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 20),
-              
               Center(
                 child: Text(
                   '© 2024 MAPSHOPTANZANIA — OPS CERTIFIED COMMERCE',
@@ -365,8 +356,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-              
-              const SizedBox(height: 16),
             ],
           ),
         ),
