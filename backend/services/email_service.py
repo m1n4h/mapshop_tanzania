@@ -4,20 +4,35 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 def send_email(subject, to_email, html_content, text_content=None):
-    """Send email using SendGrid"""
+    """Send email using SendGrid or fallback to Django SMTP backend."""
+    if settings.SENDGRID_API_KEY:
+        try:
+            message = Mail(
+                from_email=settings.EMAIL_HOST_USER,
+                to_emails=to_email,
+                subject=subject,
+                html_content=html_content,
+                plain_text_content=text_content,
+            )
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response.status_code
+        except Exception as e:
+            print(f"SendGrid email error: {e}")
+
     try:
-        message = Mail(
-            from_email=settings.EMAIL_HOST_USER,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html_content,
-            plain_text_content=text_content
+        body = text_content or 'Please view this email in HTML format.'
+        send_mail(
+            subject,
+            body,
+            settings.EMAIL_HOST_USER,
+            [to_email],
+            html_message=html_content,
+            fail_silently=False,
         )
-        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
-        response = sg.send(message)
-        return response.status_code
+        return 250
     except Exception as e:
-        print(f"Email sending error: {e}")
+        print(f"SMTP email error: {e}")
         return None
 
 def send_otp_email(email, otp):

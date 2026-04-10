@@ -12,7 +12,7 @@ class User(AbstractUser):
     )
     
     phone_regex = RegexValidator(
-        regex=r'^\+?1?\d{9,15}$',
+        regex=r'^\+255\d{9}$',
         message="Phone number must be entered in format: '+255XXXXXXXXX'"
     )
     

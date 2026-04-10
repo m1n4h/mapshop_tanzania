@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_gis',
+    'graphql_jwt.refresh_token',
     'corsheaders',
     'rest_framework_simplejwt',
     'django_filters',
@@ -214,6 +215,7 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+SENDGRID_API_KEY = config('SENDGRID_API_KEY', default='')
 
 # Twilio settings (SMS)
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')

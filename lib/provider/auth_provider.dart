@@ -68,7 +68,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Send OTP
   Future<bool> sendOTP({
-    required String email,
+    String? email,
     String? phoneNumber,
   }) async {
     _setLoading(true);
@@ -92,14 +92,17 @@ class AuthProvider extends ChangeNotifier {
 
   // Verify OTP
   Future<bool> verifyOTP({
-    required String email,
+    String? email,
+    String? phoneNumber,
     required String otpCode,
   }) async {
+    
     _setLoading(true);
     _clearError();
 
     final result = await AuthService.verifyOTP(
       email: email,
+      phoneNumber: phoneNumber,
       otpCode: otpCode,
     );
 

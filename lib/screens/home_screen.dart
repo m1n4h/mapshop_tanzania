@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import '../theme/theme_provider.dart';
+import '../provider/auth_provider.dart';
+import '../services/location_service.dart';
+import '../services/graphql_config.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,70 +20,266 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'All';
-  String _sortBy = 'Price: Low to High';
+  String _sortBy = 'Distance: Nearest';
+  
+  // Location and map state
+  Position? _userLocation;
+   GoogleMapController? _mapController;
+  final Set<Marker> _markers = {};
   
   final List<String> _categories = ['All', 'Food', 'Electronics', 'Clothing', 'Hardware'];
   
-  final List<ProductItem> _products = [
-    ProductItem(
-      name: 'Unga wa Ngano',
-      price: 1200,
-      shopName: 'Kariakoo Super Store',
-      distance: '0.5 km',
-      rating: 4.8,
-      isOnline: true,
-      imageUrl: '',
-    ),
-    ProductItem(
-      name: 'Mchele wa Kyela',
-      price: 3800,
-      shopName: 'Kariakoo Super Store',
-      distance: '0.5 km',
-      rating: 4.8,
-      isOnline: true,
-      imageUrl: '',
-    ),
-    ProductItem(
-      name: 'Mafuta ya Kupikia',
-      price: 4500,
-      shopName: 'Mama Maria\'s Shop',
-      distance: '1.2 km',
-      rating: 4.6,
-      isOnline: false,
-      imageUrl: '',
-    ),
-  ];
+  List<ProductItem> _products = [];
+  List<ShopItem> _shops = [];
+  bool _isLoading = true;
 
-  final List<ShopItem> _shops = [
-    ShopItem(
-      name: 'Kariakoo Super Store',
-      distance: '0.5 km',
-      deliveryFee: '1,500',
-      rating: 4.8,
-      isOpen: true,
-    ),
-    ShopItem(
-      name: 'Arusha Millers Ltd',
-      distance: '1.2 km',
-      deliveryFee: '1,150',
-      rating: 4.7,
-      isOpen: true,
-    ),
-    ShopItem(
-      name: 'Mama Maria\'s Shop',
-      distance: '1.2 km',
-      deliveryFee: '1,300',
-      rating: 4.6,
-      isOpen: true,
-    ),
-    ShopItem(
-      name: 'Kil-Wholesale Grainers',
-      distance: '4.5 km',
-      deliveryFee: '1,200',
-      rating: 4.5,
-      isOpen: true,
-    ),
-  ];
+  // GraphQL Queries
+  static const String shopsQuery = '''
+    query GetNearbyShops(\$lat: Float!, \$lng: Float!, \$radius: Float, \$search: String) {
+      nearbyShops(lat: \$lat, lng: \$lng, radius: \$radius) {
+        id
+        name
+        address
+        deliveryFee
+        rating
+        isOpen
+        latitude
+        longitude
+      }
+    }
+  ''';
+
+  static const String productsQuery = '''
+    query GetProducts(\$search: String, \$category: String) {
+      products(search: \$search, category: \$category) {
+        id
+        name
+        price
+        description
+        rating
+        shop {
+          id
+          name
+          deliveryFee
+          latitude
+          longitude
+        }
+        category {
+          name
+        }
+      }
+    }
+  ''';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    final location = await LocationService().getCurrentLocation();
+    if (location != null) {
+      if (!mounted) return;
+      setState(() {
+        _userLocation = location;
+      });
+      await _fetchShopsAndProducts();
+    } else {
+      // Default to Dar es Salaam if location unavailable
+      if (!mounted) return;
+      setState(() {
+        _userLocation = Position(
+          latitude: -6.8019,
+          longitude: 39.2806,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          heading: 0,
+          speed: 0,
+          speedAccuracy: 0,
+          altitudeAccuracy: 0,
+          headingAccuracy: 0
+        );
+      });
+      await _fetchShopsAndProducts();
+    }
+  }
+
+  Future<void> _fetchShopsAndProducts() async {
+    if (_userLocation == null || !mounted) return;
+
+    try {
+      final client = GraphQLConfig.getClient();
+      
+      // Clear previous markers
+      if (mounted) {
+        setState(() => _markers.clear());
+      }
+      
+      // Fetch shops
+      final shopsResult = await client.query(
+        QueryOptions(
+          document: gql(shopsQuery),
+          variables: {
+            'lat': _userLocation!.latitude,
+            'lng': _userLocation!.longitude,
+            'radius': 5.0,
+          },
+        ),
+      );
+
+      // Fetch products
+      final productsResult = await client.query(
+        QueryOptions(
+          document: gql(productsQuery),
+          variables: {
+            'search': _searchController.text,
+          },
+        ),
+      );
+
+      if (shopsResult.hasException) {
+        print('Shops query error: ${shopsResult.exception}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading shops: ${shopsResult.exception}')),
+        );
+      } else {
+        final shopsData = shopsResult.data?['nearbyShops'] as List?;
+        if (shopsData != null && shopsData.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _shops = shopsData.map((shop) {
+                try {
+                  final lat = _userLocation!.latitude;
+                  final lng = _userLocation!.longitude;
+                  final shopLat = (shop['latitude'] as num?)?.toDouble() ?? 0.0;
+                  final shopLng = (shop['longitude'] as num?)?.toDouble() ?? 0.0;
+                  
+                  final distance = LocationService().calculateDistance(
+                    lat,
+                    lng,
+                    shopLat,
+                    shopLng,
+                  );
+                  
+                  _markers.add(
+                    Marker(
+                      markerId: MarkerId(shop['id'].toString()),
+                      position: LatLng(shopLat, shopLng),
+                      infoWindow: InfoWindow(
+                        title: shop['name'] ?? 'Shop',
+                        snippet: 'TZS ${shop['deliveryFee'] ?? 1500} delivery',
+                      ),
+                    ),
+                  );
+
+                  return ShopItem(
+                    id: shop['id'] ?? 0,
+                    name: shop['name'] ?? 'Unknown Shop',
+                    distance: '${distance.toStringAsFixed(1)} km',
+                    deliveryFee: (shop['deliveryFee'] ?? 1500).toString(),
+                    rating: (shop['rating'] as num?)?.toDouble() ?? 4.5,
+                    isOpen: shop['isOpen'] ?? true,
+                    latitude: shopLat,
+                    longitude: shopLng,
+                  );
+                } catch (e) {
+                  print('Error parsing shop: $e');
+                  return ShopItem(
+                    id: 0,
+                    name: 'Error',
+                    distance: '0 km',
+                    deliveryFee: '1500',
+                    rating: 0,
+                    isOpen: false,
+                    latitude: 0,
+                    longitude: 0,
+                  );
+                }
+              }).toList();
+            });
+          }
+        } else {
+          print('No shops data received');
+        }
+      }
+
+      if (productsResult.hasException) {
+        print('Products query error: ${productsResult.exception}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading products: ${productsResult.exception}')),
+        );
+      } else {
+        final productsData = productsResult.data?['products'] as List?;
+        if (productsData != null && productsData.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _products = productsData.map((product) {
+                try {
+                  final lat = _userLocation!.latitude;
+                  final lng = _userLocation!.longitude;
+                  final shop = product['shop'] as Map?;
+                  
+                  if (shop == null) {
+                    throw Exception('Shop data missing');
+                  }
+                  
+                  final shopLat = (shop['latitude'] as num?)?.toDouble() ?? 0.0;
+                  final shopLng = (shop['longitude'] as num?)?.toDouble() ?? 0.0;
+                  final distance = LocationService().calculateDistance(lat, lng, shopLat, shopLng);
+
+                  return ProductItem(
+                    id: product['id'] ?? 0,
+                    name: product['name'] ?? 'Unknown',
+                    price: (product['price'] as num?)?.toInt() ?? 0,
+                    shopName: shop['name'] ?? 'Unknown Shop',
+                    distance: '${distance.toStringAsFixed(1)} km',
+                    rating: (product['rating'] as num?)?.toDouble() ?? 4.5,
+                    isOnline: true,
+                    imageUrl: '',
+                  );
+                } catch (e) {
+                  print('Error parsing product: $e');
+                  return ProductItem(
+                    id: 0,
+                    name: 'Error',
+                    price: 0,
+                    shopName: 'Unknown',
+                    distance: '0 km',
+                    rating: 0,
+                    isOnline: false,
+                    imageUrl: '',
+                  );
+                }
+              }).toList();
+            });
+          }
+        } else {
+          print('No products data received');
+        }
+      }
+    } catch (e) {
+      print('Error fetching data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +403,6 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 250,
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -213,43 +414,54 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.map,
-                          size: 60,
-                          color: Theme.of(context).primaryColor,
+              child: _userLocation == null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.location_off,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Loading location...',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                          _userLocation!.latitude,
+                          _userLocation!.longitude,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Interactive Map View',
-                          style: TextStyle(color: Colors.grey.shade600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'GPS Location: Dar es Salaam, Tanzania',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                        zoom: 14,
+                      ),
+                      markers: {
+                        ..._markers,
+                        Marker(
+                          markerId: const MarkerId('user_location'),
+                          position: LatLng(
+                            _userLocation!.latitude,
+                            _userLocation!.longitude,
+                          ),
+                          infoWindow: const InfoWindow(title: 'Your Location'),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            BitmapDescriptor.hueBlue,
                           ),
                         ),
-                      ],
+                      },
+                      onMapCreated: (controller) {
+                        _mapController = controller;
+                      },
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: true,
+                      zoomControlsEnabled: true,
+                      mapToolbarEnabled: true,
                     ),
-                  ),
-                  Positioned(
-                    bottom: 16,
-                    right: 16,
-                    child: FloatingActionButton.small(
-                      onPressed: () {},
-                      child: const Icon(Icons.my_location),
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
           
@@ -471,6 +683,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: InputDecoration(
               hintText: 'Search for products...',
               prefixIcon: const Icon(Icons.search),
+        
               suffixIcon: IconButton(
                 icon: const Icon(Icons.clear),
                 onPressed: () {
@@ -780,6 +993,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class ProductItem {
+  final int id;
   final String name;
   final int price;
   final String shopName;
@@ -789,6 +1003,7 @@ class ProductItem {
   final String imageUrl;
 
   ProductItem({
+    required this.id,
     required this.name,
     required this.price,
     required this.shopName,
@@ -799,18 +1014,26 @@ class ProductItem {
   });
 }
 
+
 class ShopItem {
+  final int id;
   final String name;
   final String distance;
   final String deliveryFee;
   final double rating;
   final bool isOpen;
+  final double latitude;
+  final double longitude;
 
   ShopItem({
+    required this.id,
     required this.name,
     required this.distance,
     required this.deliveryFee,
     required this.rating,
     required this.isOpen,
+    required this.latitude,
+    required this.longitude,
   });
 }
+

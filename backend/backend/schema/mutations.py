@@ -1,14 +1,49 @@
 import graphene
 import random
+import re
 import string
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.core.exceptions import ValidationError
+from django.core.validators import EmailValidator
 from django.utils import timezone
 from graphql_jwt.shortcuts import get_token, create_refresh_token
 from graphql_jwt.decorators import login_required
+from services.email_service import send_otp_email
+from services.sms_service import send_otp_sms
 from .types import *
 
 UserModel = get_user_model()
+
+
+def validate_email_address(email):
+    email = str(email).strip().lower()
+    validator = EmailValidator()
+    try:
+        validator(email)
+    except ValidationError:
+        raise ValidationError('Enter a valid email address.')
+    return email
+
+
+def normalize_tanzanian_phone(phone_number):
+    phone_number = str(phone_number).strip()
+    cleaned = re.sub(r'\D', '', phone_number)
+
+    if cleaned.startswith('0') and len(cleaned) == 10:
+        cleaned = '255' + cleaned[1:]
+    elif len(cleaned) == 9:
+        cleaned = '255' + cleaned
+
+    if cleaned.startswith('255') and len(cleaned) == 12:
+        normalized = '+' + cleaned
+    else:
+        normalized = phone_number
+
+    if not re.fullmatch(r'^\+255\d{9}$', normalized):
+        raise ValidationError("Phone number must be in Tanzania format: +255XXXXXXXXX")
+    return normalized
 
 # ==================== Auth Mutations ====================
 class TokenAuthMutation(graphene.Mutation):
@@ -26,10 +61,24 @@ class TokenAuthMutation(graphene.Mutation):
     user = graphene.Field(UserType)
 
     def mutate(self, info, email, username, provider, social_id, phone_number=None):
+        try:
+            email = validate_email_address(email)
+        except ValidationError as exc:
+            return TokenAuthMutation(success=False, message=str(exc))
+
+        if phone_number:
+            try:
+                phone_number = normalize_tanzanian_phone(phone_number)
+            except ValidationError as exc:
+                return TokenAuthMutation(success=False, message=str(exc))
+
         user = UserModel.objects.filter(email=email).first()
+        if not user and phone_number:
+            user = UserModel.objects.filter(phone_number=phone_number).first()
+
         if not user:
             if not phone_number:
-                phone_number = '+000' + ''.join(random.choices(string.digits, k=10))
+                phone_number = '+255' + ''.join(random.choices(string.digits, k=9))
 
             username = username or email.split('@')[0]
             user = UserModel.objects.create_user(
@@ -66,9 +115,25 @@ class RegisterMutation(graphene.Mutation):
     token = graphene.String()
     
     def mutate(self, info, email, username, phone_number, password, user_type='BUYER'):
+        try:
+            email = validate_email_address(email)
+        except ValidationError as exc:
+            return RegisterMutation(success=False, message=str(exc))
+
+        try:
+            phone_number = normalize_tanzanian_phone(phone_number)
+        except ValidationError as exc:
+            return RegisterMutation(success=False, message=str(exc))
+
+        if user_type == 'ADMIN' and not email.endswith('@mapshoptanzania.com'):
+            return RegisterMutation(success=False, message="Admin accounts require @mapshoptanzania.com email")
+
         if UserModel.objects.filter(email=email).exists():
             return RegisterMutation(success=False, message="Email already exists")
         
+        if UserModel.objects.filter(phone_number=phone_number).exists():
+            return RegisterMutation(success=False, message="Phone number already exists")
+
         user = UserModel.objects.create_user(
             email=email,
             username=username,
@@ -111,29 +176,43 @@ class SendOTPMutation(graphene.Mutation):
 
     success = graphene.Boolean()
     message = graphene.String()
-    otp = graphene.String()
     user = graphene.Field(UserType)
 
     def mutate(self, info, email=None, phone_number=None):
         if not email and not phone_number:
             return SendOTPMutation(success=False, message="Provide email or phone number to receive OTP.")
 
-        user = None
+        validated_email = None
+        validated_phone = None
+
         if email:
-            user = UserModel.objects.filter(email=email).first()
-        if not user and phone_number:
-            user = UserModel.objects.filter(phone_number=phone_number).first()
+            try:
+                validated_email = validate_email_address(email)
+            except ValidationError as exc:
+                return SendOTPMutation(success=False, message=str(exc))
+
+        if phone_number:
+            try:
+                validated_phone = normalize_tanzanian_phone(phone_number)
+            except ValidationError as exc:
+                return SendOTPMutation(success=False, message=str(exc))
+
+        user = None
+        if validated_email:
+            user = UserModel.objects.filter(email=validated_email).first()
+        if not user and validated_phone:
+            user = UserModel.objects.filter(phone_number=validated_phone).first()
 
         if not user:
-            if not email:
-                email = f'guest_{phone_number}@mapshoptanzania.local'
-            if not phone_number:
-                phone_number = '+000' + ''.join(random.choices(string.digits, k=10))
-            username = email.split('@')[0]
+            if not validated_email:
+                validated_email = f'guest_{validated_phone}@mapshoptanzania.local'
+            if not validated_phone:
+                validated_phone = '+255' + ''.join(random.choices(string.digits, k=9))
+            username = validated_email.split('@')[0]
             user = UserModel.objects.create_user(
-                email=email,
+                email=validated_email,
                 username=username,
-                phone_number=phone_number,
+                phone_number=validated_phone,
                 password=UserModel.objects.make_random_password(),
                 user_type='BUYER'
             )
@@ -143,7 +222,16 @@ class SendOTPMutation(graphene.Mutation):
         user.otp_created_at = timezone.now()
         user.save()
 
-        return SendOTPMutation(success=True, message="OTP sent successfully", otp=otp, user=user)
+        delivered = False
+        if validated_email:
+            delivered = send_otp_email(validated_email, otp) is not None or delivered
+        if validated_phone:
+            delivered = send_otp_sms(validated_phone, otp) is not None or delivered
+
+        if not delivered:
+            return SendOTPMutation(success=False, message="Unable to deliver OTP. Check your email or phone settings.")
+
+        return SendOTPMutation(success=True, message="OTP sent successfully", user=user)
 
 class VerifyOTPMutation(graphene.Mutation):
     class Arguments:
@@ -161,11 +249,26 @@ class VerifyOTPMutation(graphene.Mutation):
         if not email and not phone_number:
             return VerifyOTPMutation(success=False, message="Provide email or phone number to verify OTP.")
 
-        user = None
+        validated_email = None
+        validated_phone = None
+
         if email:
-            user = UserModel.objects.filter(email=email).first()
-        if not user and phone_number:
-            user = UserModel.objects.filter(phone_number=phone_number).first()
+            try:
+                validated_email = validate_email_address(email)
+            except ValidationError as exc:
+                return VerifyOTPMutation(success=False, message=str(exc))
+
+        if phone_number:
+            try:
+                validated_phone = normalize_tanzanian_phone(phone_number)
+            except ValidationError as exc:
+                return VerifyOTPMutation(success=False, message=str(exc))
+
+        user = None
+        if validated_email:
+            user = UserModel.objects.filter(email=validated_email).first()
+        if not user and validated_phone:
+            user = UserModel.objects.filter(phone_number=validated_phone).first()
 
         if not user or not user.otp_code:
             return VerifyOTPMutation(success=False, message="Invalid OTP or user not found.")

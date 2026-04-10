@@ -1,7 +1,8 @@
-import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mapshop_tanzania/services/graphql_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class AuthService {
@@ -47,21 +48,21 @@ class AuthService {
   ''';
 
   static const String sendOtpMutation = '''
-    mutation SendOTP(\$email: String!, \$phoneNumber: String) {
+    mutation SendOTP(\$email: String, \$phoneNumber: String) {
       sendOTP(email: \$email, phoneNumber: \$phoneNumber) {
         success
         message
-        otp
       }
     }
   ''';
 
   static const String verifyOtpMutation = '''
-    mutation VerifyOTP(\$email: String!, \$otpCode: String!) {
-      verifyOTP(email: \$email, otpCode: \$otpCode) {
+    mutation VerifyOTP(\$email: String, \$phoneNumber: String, \$otpCode: String!) {
+      verifyOTP(email: \$email, phoneNumber: \$phoneNumber, otpCode: \$otpCode) {
         success
         message
         token
+        refreshToken
         user {
           id
           email
@@ -75,11 +76,12 @@ class AuthService {
   ''';
 
   static const String tokenAuthMutation = '''
-    mutation tokenAuth(\$email: String!, \$username: String!, \$provider: String!, \$socialId: String!) {
-      tokenAuth(email: \$email, username: \$username, provider: \$provider, socialId: \$socialId) {
+    mutation TokenAuth(\$email: String!, \$username: String!, \$provider: String!, \$socialId: String!, \$phoneNumber: String) {
+      tokenAuth(email: \$email, username: \$username, provider: \$provider, socialId: \$socialId, phoneNumber: \$phoneNumber) {
         success
         message
         token
+        refreshToken
         user {
           id
           email
@@ -100,7 +102,7 @@ class AuthService {
     required String userType,
   }) async {
     final client = GraphQLConfig.getClient();
-    
+
     final result = await client.mutate(
       MutationOptions(
         document: gql(registerMutation),
@@ -123,11 +125,13 @@ class AuthService {
 
     final data = result.data?['register'];
     if (data != null && data['success']) {
-      // Save token
-      await _storage.write(key: 'access_token', value: data['token']);
-      await _storage.write(key: 'user_email', value: email);
-      await _storage.write(key: 'user_type', value: data['user']['userType']);
-      await _storage.write(key: 'user_id', value: data['user']['id'].toString());
+      await _storeAuthData(
+        accessToken: data['token'],
+        email: email,
+        userType: data['user']['userType'],
+        userId: data['user']['id'].toString(),
+        isLoggedIn: true,
+      );
     }
 
     return data ?? {'success': false, 'message': 'Registration failed'};
@@ -139,7 +143,7 @@ class AuthService {
     required String password,
   }) async {
     final client = GraphQLConfig.getClient();
-    
+
     final result = await client.mutate(
       MutationOptions(
         document: gql(loginMutation),
@@ -159,13 +163,14 @@ class AuthService {
 
     final data = result.data?['login'];
     if (data != null && data['success']) {
-      // Save token
-      await _storage.write(key: 'access_token', value: data['token']);
-      await _storage.write(key: 'refresh_token', value: data['refreshToken']);
-      await _storage.write(key: 'user_email', value: email);
-      await _storage.write(key: 'user_type', value: data['user']['userType']);
-      await _storage.write(key: 'user_id', value: data['user']['id'].toString());
-      await _storage.write(key: 'is_logged_in', value: 'true');
+      await _storeAuthData(
+        accessToken: data['token'],
+        refreshToken: data['refreshToken'],
+        email: email,
+        userType: data['user']['userType'],
+        userId: data['user']['id'].toString(),
+        isLoggedIn: true,
+      );
     }
 
     return data ?? {'success': false, 'message': 'Login failed'};
@@ -173,17 +178,17 @@ class AuthService {
 
   // Send OTP for guest login
   static Future<Map<String, dynamic>> sendOTP({
-    required String email,
+    String? email,
     String? phoneNumber,
   }) async {
     final client = GraphQLConfig.getClient();
-    
+
     final result = await client.mutate(
       MutationOptions(
         document: gql(sendOtpMutation),
         variables: {
-          'email': email,
-          'phoneNumber': phoneNumber,
+          if (email != null) 'email': email,
+          if (phoneNumber != null) 'phoneNumber': phoneNumber,
         },
       ),
     );
@@ -200,16 +205,18 @@ class AuthService {
 
   // Verify OTP for guest login
   static Future<Map<String, dynamic>> verifyOTP({
-    required String email,
+    String? email,
+    String? phoneNumber,
     required String otpCode,
   }) async {
     final client = GraphQLConfig.getClient();
-    
+
     final result = await client.mutate(
       MutationOptions(
         document: gql(verifyOtpMutation),
         variables: {
-          'email': email,
+          if (email != null) 'email': email,
+          if (phoneNumber != null) 'phoneNumber': phoneNumber,
           'otpCode': otpCode,
         },
       ),
@@ -226,7 +233,8 @@ class AuthService {
     if (data != null && data['success']) {
       await _storeAuthData(
         accessToken: data['token'],
-        email: email,
+        refreshToken: data['refreshToken'],
+        email: email ?? phoneNumber ?? '',
         userType: data['user']['userType'],
         userId: data['user']['id'].toString(),
         isLoggedIn: true,
@@ -255,9 +263,13 @@ class AuthService {
     await _storage.write(key: 'user_id', value: userId);
     if (isLoggedIn) {
       await _storage.write(key: 'is_logged_in', value: 'true');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', true);
     }
     if (isGuest) {
       await _storage.write(key: 'is_guest', value: 'true');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isGuest', true);
     }
   }
 
@@ -269,7 +281,6 @@ class AuthService {
         return {'success': false, 'message': 'Google sign in cancelled'};
       }
 
-      // Call social login mutation
       final client = GraphQLConfig.getClient();
       final result = await client.mutate(
         MutationOptions(
@@ -289,11 +300,14 @@ class AuthService {
 
       final data = result.data?['tokenAuth'];
       if (data != null && data['success']) {
-        await _storage.write(key: 'access_token', value: data['token']);
-        await _storage.write(key: 'user_email', value: googleUser.email);
-        await _storage.write(key: 'user_type', value: data['user']['userType']);
-        await _storage.write(key: 'user_id', value: data['user']['id'].toString());
-        await _storage.write(key: 'is_logged_in', value: 'true');
+        await _storeAuthData(
+          accessToken: data['token'],
+          refreshToken: data['refreshToken'],
+          email: googleUser.email,
+          userType: data['user']['userType'],
+          userId: data['user']['id'].toString(),
+          isLoggedIn: true,
+        );
       }
 
       return data ?? {'success': false, 'message': 'Social login failed'};
@@ -344,6 +358,7 @@ class AuthService {
       if (data != null && data['success']) {
         await _storeAuthData(
           accessToken: data['token'],
+          refreshToken: data['refreshToken'],
           email: appleCredential.email!,
           userType: data['user']['userType'],
           userId: data['user']['id'].toString(),

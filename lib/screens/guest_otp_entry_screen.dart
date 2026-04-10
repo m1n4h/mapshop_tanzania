@@ -23,9 +23,10 @@ class _GuestOTPEntryScreenState extends State<GuestOTPEntryScreen> {
     setState(() => _isLoading = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final contact = _useEmail ? _emailController.text.trim() : _phoneController.text.trim();
     final success = await authProvider.sendOTP(
-      email: _useEmail ? _emailController.text : _phoneController.text,
-      phoneNumber: !_useEmail ? _phoneController.text : null,
+      email: _useEmail ? contact : null,
+      phoneNumber: !_useEmail ? contact : null,
     );
 
     setState(() => _isLoading = false);
@@ -35,7 +36,8 @@ class _GuestOTPEntryScreenState extends State<GuestOTPEntryScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => GuestOTPVerificationScreen(
-            email: _useEmail ? _emailController.text : _phoneController.text,
+            contact: contact,
+            isEmail: _useEmail,
           ),
         ),
       );
@@ -200,7 +202,7 @@ class _GuestOTPEntryScreenState extends State<GuestOTPEntryScreen> {
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
                         'Send Code',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
               ),
               const SizedBox(height: 24),
@@ -274,8 +276,9 @@ class _GuestOTPEntryScreenState extends State<GuestOTPEntryScreen> {
 }
 
 class GuestOTPVerificationScreen extends StatefulWidget {
-  final String email;
-  const GuestOTPVerificationScreen({super.key, required this.email});
+  final String contact;
+  final bool isEmail;
+  const GuestOTPVerificationScreen({super.key, required this.contact, required this.isEmail});
 
   @override
   State<GuestOTPVerificationScreen> createState() => _GuestOTPVerificationScreenState();
@@ -326,7 +329,8 @@ class _GuestOTPVerificationScreenState extends State<GuestOTPVerificationScreen>
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.verifyOTP(
-      email: widget.email,
+      email: widget.isEmail ? widget.contact : null,
+      phoneNumber: widget.isEmail ? null : widget.contact,
       otpCode: otp,
     );
 
@@ -351,7 +355,10 @@ class _GuestOTPVerificationScreenState extends State<GuestOTPVerificationScreen>
     setState(() => _isLoading = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.sendOTP(email: widget.email);
+    await authProvider.sendOTP(
+      email: widget.isEmail ? widget.contact : null,
+      phoneNumber: widget.isEmail ? null : widget.contact,
+    );
 
     setState(() {
       _isLoading = false;
@@ -361,7 +368,7 @@ class _GuestOTPVerificationScreenState extends State<GuestOTPVerificationScreen>
         controller.clear();
       }
       _focusNodes[0].requestFocus();
-    });
+    }); 
   }
 
   @override
@@ -434,7 +441,7 @@ class _GuestOTPVerificationScreenState extends State<GuestOTPVerificationScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                "We've sent a 4-digit code to your ${widget.email.contains('@') ? 'email' : 'phone'}. Please enter it below to proceed.",
+                "We've sent a 4-digit code to your ${widget.isEmail ? 'email' : 'phone'}. Please enter it below to proceed.",
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -491,7 +498,7 @@ class _GuestOTPVerificationScreenState extends State<GuestOTPVerificationScreen>
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
                         'Verify & Continue',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
               ),
               const SizedBox(height: 24),

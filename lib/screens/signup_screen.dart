@@ -35,7 +35,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         // Navigate to OTP verification
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Account created! Please verify OTP sent to your email/phone'),
+            content: Text('Account created successfully'),
             backgroundColor: Colors.green,
           ),
         );

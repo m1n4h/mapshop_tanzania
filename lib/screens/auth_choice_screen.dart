@@ -108,7 +108,7 @@ class AuthChoiceScreen extends StatelessWidget {
               // Continue as Guest
               TextButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, '/otp_verification');
+                  Navigator.pushNamed(context, '/guest_otp_entry');
                 },
                 child: Text(
                   'Continue as Guest',

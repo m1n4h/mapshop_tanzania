@@ -1,7 +1,7 @@
 import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/provider/auth_provider.dart';
+import 'package:mapshop_tanzania/screens/guest_otp_entry_screen.dart';
 import 'package:mapshop_tanzania/screens/order/delivery_signup_screen.dart';
 import 'package:mapshop_tanzania/screens/order/order_arrived_screen.dart';
 import 'package:mapshop_tanzania/screens/order/order_created_screen.dart';
@@ -69,6 +69,7 @@ class MyApp extends StatelessWidget {
               '/auth_choice': (context) => const AuthChoiceScreen(),
               '/signup': (context) => const SignUpScreen(),
               '/signin': (context) => const SignInScreen(),
+              '/guest_otp_entry' : (context) => const GuestOTPEntryScreen(),
               '/otp_verification': (context) => const OTPVerificationScreen(),
               '/home': (context) => const HomeScreen(),
               '/profile': (context) => const ProfileScreen(),

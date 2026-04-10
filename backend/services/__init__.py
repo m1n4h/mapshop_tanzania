@@ -1,5 +1,5 @@
 # Services module
-from .map_service import MapService
+from .map_services import MapService
 from .sms_service import send_sms, send_otp_sms
 from .email_service import send_email, send_otp_email
 from .payment_service import PaymentService
