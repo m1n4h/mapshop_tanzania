@@ -55,6 +55,7 @@ class Query(graphene.ObjectType):
     
     # ==================== Dashboard Stats ====================
     dashboard_stats = graphene.JSONString()
+    my_products = graphene.List(ProductType)
     
     # ==================== Resolvers ====================
     def resolve_me(self, info):
@@ -249,6 +250,15 @@ class Query(graphene.ObjectType):
             }
         
         return stats
+
+    @login_required
+    def resolve_my_products(self, info):
+        user = info.context.user
+        if user.user_type == 'SELLER':
+            return Product.objects.filter(shop__seller=user, is_active=True)
+        if user.user_type == 'ADMIN':
+            return Product.objects.filter(is_active=True)
+        return Product.objects.none()
     
     def calculate_distance(self, lat1, lon1, lat2, lon2):
         import math

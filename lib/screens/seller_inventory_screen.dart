@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:mapshop_tanzania/screens/add_product_screen.dart';
+import 'package:mapshop_tanzania/screens/edit_product_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../theme/theme_provider.dart';
+import '../provider/product_provider.dart';
+import '../provider/auth_provider.dart';
+import '../services/location_service.dart';
 
 class SellerInventoryScreen extends StatefulWidget {
   const SellerInventoryScreen({super.key});
@@ -13,8 +18,49 @@ class SellerInventoryScreen extends StatefulWidget {
 class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
   int _selectedIndex = 0;
   String searchQuery = '';
+  double? _currentLatitude;
+  double? _currentLongitude;
+  bool _isUpdatingLocation = false;
+  int _mapViewsToday = 1240;
+  double _sellerRating = 4.9;
+  int _totalProducts = 0;
+  int _totalOrders = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSellerData();
+    });
+  }
+
+  Future<void> _loadSellerData() async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    await productProvider.fetchSellerProducts();
+    if (!mounted) return;
+
+    setState(() {
+      _products = productProvider.products.map((productMap) {
+        return Product(
+          id: productMap['id'] as int?,
+          name: productMap['name'] as String? ?? 'Unnamed product',
+          price: ((productMap['price'] ?? 0) as num).toInt(),
+          unit: productMap['unit'] as String? ?? 'unit',
+          stock: (productMap['stock'] ?? 0) as int,
+          category: productMap['category'] != null ? (productMap['category']['name'] as String? ?? 'Unknown') : 'Unknown',
+          imageUrl: productMap['images'] != null && (productMap['images'] as List).isNotEmpty
+              ? productMap['images'][0]['image'] as String
+              : 'assets/images/placeholder.png',
+        );
+      }).toList();
+      _totalProducts = _products.length;
+      _totalOrders = 15;
+      _mapViewsToday = 1240;
+      _sellerRating = 4.9;
+    });
+  }
   
-  final List<Product> _products = [
+  List<Product> _products = [
     Product(
       name: 'Unga wa Ngano',
       price: 2500,
@@ -68,17 +114,18 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('isLoggedIn', false);
-              if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/signin');
-              }
+              if (!mounted) return;
+              navigator.pushReplacementNamed('/signin');
             },
           ),
         ],
       ),
       body: _selectedIndex == 0 ? _buildDashboard() : 
-             _selectedIndex == 1 ? _buildProductsList() :
+             _selectedIndex == 1 ? _buildMyProducts() :
+             _selectedIndex == 2 ? _buildOrders() :
              _buildProfileSettings(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -95,7 +142,11 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory),
-            label: 'Products',
+            label: 'My Products',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt),
+            label: 'Orders',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
@@ -104,6 +155,51 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _updateStoreLocation() async {
+    setState(() => _isUpdatingLocation = true);
+
+    try {
+      final position = await LocationService().getCurrentLocation();
+      if (position != null) {
+        setState(() {
+          _currentLatitude = position.latitude;
+          _currentLongitude = position.longitude;
+        });
+
+        // Here you would typically send the location update to the backend
+        // For now, we'll just show a success message
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Store location updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Failed to get location. Please check permissions.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Error updating location: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isUpdatingLocation = false);
+    }
   }
 
   Widget _buildDashboard() {
@@ -145,7 +241,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 Text(
                   'Precise GPS coordinates link your stock to the free map.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withAlpha(230),
                     fontSize: 13,
                   ),
                 ),
@@ -154,7 +250,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 Text(
                   'CONFIRMATE',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withAlpha(178),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1,
@@ -164,7 +260,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withAlpha(51),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -173,7 +269,9 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '5.7924° S, 39.2862° W',
+                          _currentLatitude != null && _currentLongitude != null
+                            ? '${_currentLatitude!.toStringAsFixed(4)}° S, ${_currentLongitude!.toStringAsFixed(4)}° W'
+                            : 'Location not set',
                           style: const TextStyle(color: Colors.white, fontSize: 14),
                         ),
                       ),
@@ -184,17 +282,26 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: _isUpdatingLocation ? null : _updateStoreLocation,
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.white),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Update Store Location',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    child: _isUpdatingLocation
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Update Store Location',
+                          style: TextStyle(color: Colors.white),
+                        ),
                   ),
                 ),
               ],
@@ -206,11 +313,11 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildStatCard('1,240', 'Map Views Today', Icons.map, Colors.blue),
+                child: _buildStatCard(_mapViewsToday.toString(), 'Map Views Today', Icons.map, Colors.blue),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildStatCard('4.9', 'Seller Rating', Icons.star, Colors.amber),
+                child: _buildStatCard(_sellerRating.toStringAsFixed(1), 'Seller Rating', Icons.star, Colors.amber),
               ),
             ],
           ),
@@ -220,15 +327,21 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildActionButton('My Products', Icons.shopping_bag, Colors.green),
+                child: _buildActionButton('My Products ($_totalProducts)', Icons.shopping_bag, Colors.green, () {
+                  setState(() => _selectedIndex = 1);
+                }),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildActionButton('New Orders', Icons.receipt, Colors.orange),
+                child: _buildActionButton('New Orders ($_totalOrders)', Icons.receipt, Colors.orange, () {
+                  setState(() => _selectedIndex = 2);
+                }),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildActionButton('Site', Icons.store, Colors.purple),
+                child: _buildActionButton('Site', Icons.store, Colors.purple, () {
+                  // Navigate to site management
+                }),
               ),
             ],
           ),
@@ -273,10 +386,10 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               ),
               TextButton.icon(
                 onPressed: () {
-                  setState(() {
-                  
-                    _selectedIndex = 1;
-                  });
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AddProductScreen()),
+                  );
                 },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add New'),
@@ -305,7 +418,12 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddProductScreen()),
+                );
+              },
               icon: const Icon(Icons.add),
               label: const Text('Add New Product'),
               style: ElevatedButton.styleFrom(
@@ -328,7 +446,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 4,
                   offset: const Offset(0, -2),
                 ),
@@ -346,6 +464,68 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showDeleteConfirmation(Product product) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Product'),
+          content: Text('Are you sure you want to delete "${product.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final productProvider = Provider.of<ProductProvider>(context, listen: false);
+                final navigator = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+                final success = product.id != null
+                    ? await productProvider.deleteProduct(product.id!)
+                    : true;
+                if (!mounted) return;
+                navigator.pop();
+
+                if (success) {
+                  setState(() {
+                    if (product.id != null) {
+                      _products = productProvider.products.map((productMap) {
+                        return Product(
+                          id: productMap['id'] as int?,
+                          name: productMap['name'] as String? ?? 'Unnamed product',
+                          price: ((productMap['price'] ?? 0) as num).toInt(),
+                          unit: productMap['unit'] as String? ?? 'unit',
+                          stock: (productMap['stock'] ?? 0) as int,
+                          category: productMap['category'] != null ? (productMap['category']['name'] as String? ?? 'Unknown') : 'Unknown',
+                          imageUrl: productMap['images'] != null && (productMap['images'] as List).isNotEmpty
+                              ? productMap['images'][0]['image'] as String
+                              : 'assets/images/placeholder.png',
+                        );
+                      }).toList();
+                    } else {
+                      _products.remove(product);
+                    }
+                    _totalProducts = _products.length;
+                  });
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('${product.name} deleted successfully')),
+                  );
+                } else {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(productProvider.errorMessage ?? 'Unable to delete product')),
+                  );
+                }
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -423,7 +603,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: getStockColor().withOpacity(0.1),
+                      color: getStockColor().withAlpha(26),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -442,12 +622,34 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                  onPressed: () {},
+                  onPressed: () {
+                    if (product.id == null) return;
+                    Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditProductScreen(
+                          productId: product.id!,
+                          initialName: product.name,
+                          initialDescription: '',
+                          initialPrice: product.price.toDouble(),
+                          initialStock: product.stock,
+                          initialUnit: product.unit,
+                          initialCategoryName: product.category,
+                        ),
+                      ),
+                    ).then((value) {
+                      if (value == true && mounted) {
+                        _loadSellerData();
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 4),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: () {},
+                  onPressed: () {
+                    _showDeleteConfirmation(product);
+                  },
                 ),
               ],
             ),
@@ -488,15 +690,11 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     );
   }
 
-  Widget _buildActionButton(String title, IconData icon, Color color) {
+  Widget _buildActionButton(String title, IconData icon, Color color, VoidCallback? onPressed) {
     return ElevatedButton(
-      onPressed: () {
-        if (title == 'Notifications') {
-          Navigator.pushNamed(context, '/alerts_dashboard');
-        }
-      },
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: color.withOpacity(0.1),
+        backgroundColor: color.withAlpha(26),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -542,7 +740,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     );
   }
 
-  Widget _buildProductsList() {
+  Widget _buildMyProducts() {
     final filteredProducts = _products.where((product) =>
         product.name.toLowerCase().contains(searchQuery.toLowerCase())).toList();
     
@@ -550,20 +748,49 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search inventory...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search inventory...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value;
+                  });
+                },
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            onChanged: (value) {
-              setState(() {
-                searchQuery = value;
-              });
-            },
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AddProductScreen()),
+                    ).then((value) {
+                      if (value == true && mounted) {
+                        _loadSellerData();
+                      }
+                    });
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add New Product'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -580,7 +807,91 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     );
   }
 
+  Widget _buildOrders() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Orders',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 16),
+          // This would be replaced with actual order data from the backend
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 5,
+            itemBuilder: (context, index) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Order #ORD00${index + 1}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getOrderStatusColor(index).withAlpha(26),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _getOrderStatusText(index),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _getOrderStatusColor(index),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Buyer: buyer${index + 1}@example.com'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Items: ${index + 2} items • TZS ${(index + 1) * 15000}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Status: ${_getOrderStatusText(index)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            child: const Text('View Details'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileSettings() {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.user;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -592,16 +903,19 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               children: [
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                  child: Icon(
+                  backgroundColor: Theme.of(context).primaryColor.withAlpha(26),
+                  backgroundImage: user?['profilePicture'] != null 
+                    ? NetworkImage(user!['profilePicture']) 
+                    : null,
+                  child: user?['profilePicture'] == null ? Icon(
                     Icons.store,
                     size: 50,
                     color: Theme.of(context).primaryColor,
-                  ),
+                  ) : null,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Serengeti Flux',
+                  user?['username'] ?? 'Seller',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -625,7 +939,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 10,
                 ),
               ],
@@ -667,7 +981,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 10,
                 ),
               ],
@@ -688,17 +1002,16 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Serengeti Flux',
+                      user?['username'] ?? 'Seller',
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
                 const Divider(height: 24),
-                _buildDetailRow('Name', 'Serengeti Flux'),
-                _buildDetailRow('Email', 'serengetiflux@gmail.com'),
-                _buildDetailRow('Phone', '+255 786 123456'),
-                _buildDetailRow('Website', 'www.serengetiflux.com'),
-                _buildDetailRow('Location', 'Tanzania'),
+                _buildDetailRow('Name', user?['username'] ?? 'N/A'),
+                _buildDetailRow('Email', user?['email'] ?? 'N/A'),
+                _buildDetailRow('Phone', user?['phoneNumber'] ?? 'N/A'),
+                _buildDetailRow('Location', user?['address'] ?? 'Tanzania'),
               ],
             ),
           ),
@@ -712,7 +1025,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 10,
                 ),
               ],
@@ -720,7 +1033,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'CPD & Map Services',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -743,7 +1056,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 10,
                 ),
               ],
@@ -751,7 +1064,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Notification Preferences',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -800,7 +1113,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : Colors.transparent,
+        color: isSelected ? Theme.of(context).primaryColor.withAlpha(26) : Colors.transparent,
         border: Border.all(
           color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade300,
         ),
@@ -913,15 +1226,46 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
           Switch(
             value: true,
             onChanged: (value) {},
-            activeColor: Theme.of(context).primaryColor,
+            activeThumbColor: Theme.of(context).primaryColor,
           ),
         ],
       ),
     );
   }
+
+  Color _getOrderStatusColor(int index) {
+    switch (index % 5) {
+      case 0:
+        return Colors.orange;
+      case 1:
+        return Colors.blue;
+      case 2:
+        return Colors.green;
+      case 3:
+        return Colors.red;
+      default:
+        return Colors.purple;
+    }
+  }
+
+  String _getOrderStatusText(int index) {
+    switch (index % 5) {
+      case 0:
+        return 'Pending';
+      case 1:
+        return 'Processing';
+      case 2:
+        return 'Shipped';
+      case 3:
+        return 'Delivered';
+      default:
+        return 'Cancelled';
+    }
+  }
 }
 
 class Product {
+  final int? id;
   final String name;
   final int price;
   final String unit;
@@ -930,6 +1274,7 @@ class Product {
   final String imageUrl;
   
   Product({
+    this.id,
     required this.name,
     required this.price,
     required this.unit,

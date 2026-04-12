@@ -122,15 +122,36 @@ class GraphQLQueries {
   // Seller Products
   static const String getSellerProducts = '''
     query GetSellerProducts {
-      products {
+      myProducts {
         id
         name
+        description
         price
+        discountPrice
+        finalPrice
         stock
         unit
-        ordersCount
-        viewsCount
+        images {
+          id
+          image
+          isMain
+        }
+        shop {
+          id
+          name
+          latitude
+          longitude
+          address
+          rating
+          isOpen
+          deliveryFee
+        }
+        category {
+          id
+          name
+        }
         rating
+        ordersCount
       }
     }
   ''';
@@ -158,7 +179,7 @@ class GraphQLQueries {
 class GraphQLMutations {
   // Product Mutations
   static const String createProduct = '''
-    mutation CreateProduct(\$shopId: Int!, \$categoryId: Int!, \$name: String!, \$description: String!, \$price: Float!, \$stock: Int!, \$unit: String!) {
+    mutation CreateProduct(\$shopId: Int, \$categoryId: Int!, \$name: String!, \$description: String!, \$price: Float!, \$stock: Int!, \$unit: String!) {
       createProduct(shopId: \$shopId, categoryId: \$categoryId, name: \$name, description: \$description, price: \$price, stock: \$stock, unit: \$unit) {
         success
         message
@@ -173,8 +194,8 @@ class GraphQLMutations {
   ''';
 
   static const String updateProduct = '''
-    mutation UpdateProduct(\$productId: Int!, \$name: String, \$price: Float, \$stock: Int, \$description: String) {
-      updateProduct(productId: \$productId, name: \$name, price: \$price, stock: \$stock, description: \$description) {
+    mutation UpdateProduct(\$productId: Int!, \$name: String, \$price: Float, \$stock: Int, \$description: String, \$unit: String, \$categoryId: Int) {
+      updateProduct(productId: \$productId, name: \$name, price: \$price, stock: \$stock, description: \$description, unit: \$unit, categoryId: \$categoryId) {
         success
         message
         product {

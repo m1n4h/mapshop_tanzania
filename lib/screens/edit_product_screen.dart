@@ -2,22 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/provider/product_provider.dart';
 import 'package:provider/provider.dart';
 
+class EditProductScreen extends StatefulWidget {
+  final int productId;
+  final String initialName;
+  final String initialDescription;
+  final double initialPrice;
+  final int initialStock;
+  final String initialUnit;
+  final String initialCategoryName;
 
-class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  const EditProductScreen({
+    super.key,
+    required this.productId,
+    required this.initialName,
+    required this.initialDescription,
+    required this.initialPrice,
+    required this.initialStock,
+    required this.initialUnit,
+    required this.initialCategoryName,
+  });
 
   @override
-  State<AddProductScreen> createState() => _AddProductScreenState();
+  State<EditProductScreen> createState() => _EditProductScreenState();
 }
 
-class _AddProductScreenState extends State<AddProductScreen> {
+class _EditProductScreenState extends State<EditProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   final _stockController = TextEditingController();
   final _unitController = TextEditingController();
-  int _selectedCategoryId = 1;
+  late int _selectedCategoryId;
   bool _isSubmitting = false;
 
   final List<Map<String, dynamic>> _categories = [
@@ -28,10 +44,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.initialName;
+    _descriptionController.text = widget.initialDescription;
+    _priceController.text = widget.initialPrice.toStringAsFixed(0);
+    _stockController.text = widget.initialStock.toString();
+    _unitController.text = widget.initialUnit;
+    _selectedCategoryId = _categoryIdFromName(widget.initialCategoryName);
+  }
+
+  int _categoryIdFromName(String name) {
+    final lower = name.toLowerCase();
+    return _categories.firstWhere(
+      (category) => (category['name'] as String).toLowerCase() == lower,
+      orElse: () => _categories.first,
+    )['id'] as int;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add New Product'),
+        title: const Text('Edit Product'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
       ),
@@ -42,7 +77,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Name
               const Text('Product Name', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
@@ -54,8 +88,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-
-              // Category
               const Text('Category', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
@@ -71,13 +103,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     _selectedCategoryId = value!;
                   });
                 },
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-
-              // Price
               const Text('Price (TZS)', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
@@ -91,8 +119,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-
-              // Stock
               const Text('Stock Quantity', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
@@ -105,8 +131,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-
-              // Unit
               const Text('Unit', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
@@ -118,8 +142,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-
-              // Description
               const Text('Description', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
@@ -131,8 +153,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-
-              // Submit Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -146,7 +166,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Add Product', style: TextStyle(fontSize: 16, color: Colors.white)),
+                      : const Text('Save Changes', style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
             ],
@@ -162,13 +182,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => _isSubmitting = true);
 
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
-    final success = await productProvider.createProduct(
-      categoryId: _selectedCategoryId,
+    final success = await productProvider.updateProduct(
+      productId: widget.productId,
       name: _nameController.text,
       description: _descriptionController.text,
       price: double.parse(_priceController.text),
       stock: int.parse(_stockController.text),
       unit: _unitController.text,
+      categoryId: _selectedCategoryId,
     );
 
     setState(() => _isSubmitting = false);
@@ -177,12 +198,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final messenger = ScaffoldMessenger.of(context);
     if (success) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Product added successfully!'), backgroundColor: Colors.green),
+        const SnackBar(content: Text('Product updated successfully!'), backgroundColor: Colors.green),
       );
       Navigator.pop(context, true);
     } else {
       messenger.showSnackBar(
-        SnackBar(content: Text(productProvider.errorMessage ?? 'Failed to add product'), backgroundColor: Colors.red),
+        SnackBar(content: Text(productProvider.errorMessage ?? 'Failed to update product'), backgroundColor: Colors.red),
       );
     }
   }

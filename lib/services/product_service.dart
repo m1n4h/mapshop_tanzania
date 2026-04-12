@@ -38,7 +38,7 @@ class ProductService {
   }
 
   static Future<Map<String, dynamic>> createProduct({
-    required int shopId,
+    int? shopId,
     required int categoryId,
     required String name,
     required String description,
@@ -48,18 +48,22 @@ class ProductService {
   }) async {
     final client = GraphQLConfig.getClient();
     
+    final variables = {
+      'categoryId': categoryId,
+      'name': name,
+      'description': description,
+      'price': price,
+      'stock': stock,
+      'unit': unit,
+    };
+    if (shopId != null) {
+      variables['shopId'] = shopId;
+    }
+
     final result = await client.mutate(
       MutationOptions(
         document: gql(GraphQLMutations.createProduct),
-        variables: {
-          'shopId': shopId,
-          'categoryId': categoryId,
-          'name': name,
-          'description': description,
-          'price': price,
-          'stock': stock,
-          'unit': unit,
-        },
+        variables: variables,
       ),
     );
 
@@ -79,14 +83,18 @@ class ProductService {
     double? price,
     int? stock,
     String? description,
+    String? unit,
+    int? categoryId,
   }) async {
     final client = GraphQLConfig.getClient();
     
-    final variables = {'productId': productId};
-    if (name != null) variables['name'] = name as int;
-    if (price != null) variables['price'] = price as int;
+    final Map<String, dynamic> variables = {'productId': productId};
+    if (name != null) variables['name'] = name;
+    if (price != null) variables['price'] = price;
     if (stock != null) variables['stock'] = stock;
-    if (description != null) variables['description'] = description as int;
+    if (description != null) variables['description'] = description;
+    if (unit != null) variables['unit'] = unit;
+    if (categoryId != null) variables['categoryId'] = categoryId;
 
     final result = await client.mutate(
       MutationOptions(
@@ -123,5 +131,28 @@ class ProductService {
     }
 
     return result.data?['deleteProduct'] ?? {'success': false, 'message': 'Deletion failed'};
+  }
+
+  static Future<Map<String, dynamic>> getSellerProducts() async {
+    final client = GraphQLConfig.getClient();
+
+    final result = await client.query(
+      QueryOptions(
+        document: gql(GraphQLQueries.getSellerProducts),
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+        'products': []
+      };
+    }
+
+    return {
+      'success': true,
+      'products': result.data?['myProducts'] ?? [],
+    };
   }
 }

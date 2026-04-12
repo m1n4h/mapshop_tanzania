@@ -28,7 +28,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Juma Hamis',
+                    'amina kalonge',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -123,7 +123,7 @@ class ProfileScreen extends StatelessWidget {
                 label: const Text('Sign Out'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: const Color.fromARGB(255, 248, 246, 246)),
+                  side: BorderSide(color: Colors.white),
                   foregroundColor: Colors.red,
                 ),
               ),

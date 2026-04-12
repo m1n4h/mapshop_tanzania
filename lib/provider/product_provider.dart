@@ -35,7 +35,7 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<bool> createProduct({
-    required int shopId,
+    int? shopId,
     required int categoryId,
     required String name,
     required String description,
@@ -58,7 +58,7 @@ class ProductProvider extends ChangeNotifier {
     _setLoading(false);
     
     if (result['success']) {
-      await fetchProducts();
+      await fetchSellerProducts();
       return true;
     } else {
       _errorMessage = result['message'];
@@ -72,6 +72,8 @@ class ProductProvider extends ChangeNotifier {
     double? price,
     int? stock,
     String? description,
+    String? unit,
+    int? categoryId,
   }) async {
     _setLoading(true);
     
@@ -81,12 +83,14 @@ class ProductProvider extends ChangeNotifier {
       price: price,
       stock: stock,
       description: description,
+      unit: unit,
+      categoryId: categoryId,
     );
 
     _setLoading(false);
     
     if (result['success']) {
-      await fetchProducts();
+      await fetchSellerProducts();
       return true;
     } else {
       _errorMessage = result['message'];
@@ -102,12 +106,25 @@ class ProductProvider extends ChangeNotifier {
     _setLoading(false);
     
     if (result['success']) {
-      await fetchProducts();
+      await fetchSellerProducts();
       return true;
     } else {
       _errorMessage = result['message'];
       return false;
     }
+  }
+
+  Future<void> fetchSellerProducts() async {
+    _setLoading(true);
+
+    final result = await ProductService.getSellerProducts();
+    if (result['success']) {
+      _products = List<Map<String, dynamic>>.from(result['products']);
+    } else {
+      _errorMessage = result['message'];
+    }
+
+    _setLoading(false);
   }
 
   void _setLoading(bool loading) {

@@ -364,7 +364,7 @@ class UpdateShopMutation(graphene.Mutation):
 # ==================== Product Mutations ====================
 class CreateProductMutation(graphene.Mutation):
     class Arguments:
-        shop_id = graphene.Int(required=True)
+        shop_id = graphene.Int(required=False)
         category_id = graphene.Int(required=True)
         name = graphene.String(required=True)
         description = graphene.String(required=True)
@@ -377,18 +377,91 @@ class CreateProductMutation(graphene.Mutation):
     product = graphene.Field(ProductType)
     
     @login_required
-    def mutate(self, info, shop_id, category_id, **kwargs):
+    def mutate(self, info, category_id, name, description, price, stock, unit, shop_id=None):
         user = info.context.user
         try:
-            shop = Shop.objects.get(id=shop_id)
+            if shop_id is not None:
+                shop = Shop.objects.get(id=shop_id)
+            elif user.user_type == 'SELLER' and user.shops.exists():
+                shop = user.shops.first()
+            else:
+                return CreateProductMutation(success=False, message="Shop id required")
+
             if shop.seller != user and user.user_type != 'ADMIN':
                 return CreateProductMutation(success=False, message="Permission denied")
             
             category = Category.objects.get(id=category_id)
-            product = Product.objects.create(shop=shop, category=category, **kwargs)
+            product = Product.objects.create(shop=shop, category=category, name=name, description=description, price=price, stock=stock, unit=unit)
             return CreateProductMutation(success=True, message="Product created successfully", product=product)
+        except Shop.DoesNotExist:
+            return CreateProductMutation(success=False, message="Shop not found")
+        except Category.DoesNotExist:
+            return CreateProductMutation(success=False, message="Category not found")
         except Exception as e:
             return CreateProductMutation(success=False, message=str(e))
+
+class UpdateProductMutation(graphene.Mutation):
+    class Arguments:
+        product_id = graphene.Int(required=True)
+        name = graphene.String()
+        description = graphene.String()
+        price = graphene.Float()
+        stock = graphene.Int()
+        unit = graphene.String()
+        category_id = graphene.Int()
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    product = graphene.Field(ProductType)
+    
+    @login_required
+    def mutate(self, info, product_id, **kwargs):
+        user = info.context.user
+        try:
+            product = Product.objects.get(id=product_id)
+            if product.shop.seller != user and user.user_type != 'ADMIN':
+                return UpdateProductMutation(success=False, message="Permission denied")
+            
+            category_id = kwargs.pop('category_id', None)
+            if category_id is not None:
+                category = Category.objects.get(id=category_id)
+                product.category = category
+
+            for key, value in kwargs.items():
+                if value is not None:
+                    setattr(product, key, value)
+            product.save()
+
+            return UpdateProductMutation(success=True, message="Product updated successfully", product=product)
+        except Product.DoesNotExist:
+            return UpdateProductMutation(success=False, message="Product not found")
+        except Category.DoesNotExist:
+            return UpdateProductMutation(success=False, message="Category not found")
+        except Exception as e:
+            return UpdateProductMutation(success=False, message=str(e))
+
+class DeleteProductMutation(graphene.Mutation):
+    class Arguments:
+        product_id = graphene.Int(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, product_id):
+        user = info.context.user
+        try:
+            product = Product.objects.get(id=product_id)
+            if product.shop.seller != user and user.user_type != 'ADMIN':
+                return DeleteProductMutation(success=False, message="Permission denied")
+            
+            product.is_active = False
+            product.save()
+            return DeleteProductMutation(success=True, message="Product deleted successfully")
+        except Product.DoesNotExist:
+            return DeleteProductMutation(success=False, message="Product not found")
+        except Exception as e:
+            return DeleteProductMutation(success=False, message=str(e))
 
 # ==================== Order Mutations ====================
 class CreateOrderMutation(graphene.Mutation):
@@ -492,6 +565,8 @@ class Mutation(graphene.ObjectType):
     
     # Product
     create_product = CreateProductMutation.Field()
+    update_product = UpdateProductMutation.Field()
+    delete_product = DeleteProductMutation.Field()
     
     # Order
     create_order = CreateOrderMutation.Field()
