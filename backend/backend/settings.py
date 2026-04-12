@@ -16,7 +16,10 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.0.213']
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    '192.168.0.213']
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -35,7 +38,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_filters',
     'channels',
-    'drf_yasg',
+    #'drf_yasg',
     'ckeditor',
     'import_export',
     'debug_toolbar',

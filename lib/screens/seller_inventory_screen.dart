@@ -274,6 +274,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               TextButton.icon(
                 onPressed: () {
                   setState(() {
+                  
                     _selectedIndex = 1;
                   });
                 },

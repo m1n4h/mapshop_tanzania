@@ -1,6 +1,14 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/provider/auth_provider.dart';
+import 'package:mapshop_tanzania/provider/chart_provider.dart';
+import 'package:mapshop_tanzania/provider/delivery_provider.dart';
+import 'package:mapshop_tanzania/provider/order_provider.dart';
+import 'package:mapshop_tanzania/provider/product_provider.dart';
+import 'package:mapshop_tanzania/provider/shop_provider.dart';
+import 'package:mapshop_tanzania/screens/add_product_screen.dart';
+import 'package:mapshop_tanzania/screens/chart_screen.dart';
+import 'package:mapshop_tanzania/screens/conservations_screen.dart';
 import 'package:mapshop_tanzania/screens/guest_otp_entry_screen.dart';
 import 'package:mapshop_tanzania/screens/order/delivery_signup_screen.dart';
 import 'package:mapshop_tanzania/screens/order/order_arrived_screen.dart';
@@ -30,13 +38,13 @@ import 'screens/alerts_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize GraphQL
   await initGraphQL();
-  
+
   final prefs = await SharedPreferences.getInstance();
   final isDarkMode = prefs.getBool('isDarkMode') ?? false;
-  
+
   runApp(MyApp(isDarkMode: isDarkMode));
 }
 
@@ -46,7 +54,7 @@ Future<void> initGraphQL() async {
 
 class MyApp extends StatelessWidget {
   final bool isDarkMode;
-  
+
   const MyApp({super.key, required this.isDarkMode});
 
   @override
@@ -55,6 +63,11 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ProductProvider()),
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => DeliveryProvider()),
+        ChangeNotifierProvider(create: (_) => ShopProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -64,12 +77,12 @@ class MyApp extends StatelessWidget {
             theme: themeProvider.themeData,
             initialRoute: '/',
             routes: {
-              '/':(context) => const SplashScreen(),
+              '/': (context) => const SplashScreen(),
               '/onboarding': (context) => const OnboardingScreen(),
               '/auth_choice': (context) => const AuthChoiceScreen(),
               '/signup': (context) => const SignUpScreen(),
               '/signin': (context) => const SignInScreen(),
-              '/guest_otp_entry' : (context) => const GuestOTPEntryScreen(),
+              '/guest_otp_entry': (context) => const GuestOTPEntryScreen(),
               '/otp_verification': (context) => const OTPVerificationScreen(),
               '/home': (context) => const HomeScreen(),
               '/profile': (context) => const ProfileScreen(),
@@ -81,12 +94,21 @@ class MyApp extends StatelessWidget {
               '/alerts_dashboard': (context) => const AlertsDashboardScreen(),
               // Order Lifecycle Routes
               '/order_created': (context) => const OrderCreatedScreen(),
+              '/add_product': (context) => const AddProductScreen(),
+
               '/order_validated': (context) => const OrderValidatedScreen(),
-              '/payment_successful': (context) => const PaymentSuccessfulScreen(),
+              '/payment_successful': (context) =>
+                  const PaymentSuccessfulScreen(),
               '/order_arrived': (context) => const OrderArrivedScreen(),
               '/order_packed': (context) => const OrderPackedScreen(),
               '/delivery_signup': (context) => const DeliverySignupScreen(),
               '/store_order': (context) => const StoreOrderScreen(),
+              '/chat': (context) => const ConversationsScreen(),
+              '/chat_detail': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
+                return ChatScreen(conversation: args);
+              },
             },
           );
         },

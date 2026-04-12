@@ -394,4 +394,47 @@ class AuthService {
   static Future<String?> getAccessToken() async {
     return await _storage.read(key: 'access_token');
   }
+
+  
+  // Add to AuthService class
+static Future<String?> getUserId() async {
+  return await _storage.read(key: 'user_id');
 }
+
+static Future<String?> getUserEmail() async {
+  return await _storage.read(key: 'user_email');
+}
+
+static Future<String?> getUserName() async {
+  return await _storage.read(key: 'user_name');
+}
+
+static Future<Map<String, dynamic>?> getUserProfile() async {
+  final client = GraphQLConfig.getClient();
+  
+  const String query = '''
+    query GetMe {
+      me {
+        id
+        email
+        username
+        phoneNumber
+        userType
+        isVerified
+        profilePicture
+      }
+    }
+  ''';
+  
+  final result = await client.query(
+    QueryOptions(document: gql(query)),
+  );
+  
+  if (result.hasException) {
+    return null;
+  }
+  
+  return result.data?['me'];
+}
+}
+

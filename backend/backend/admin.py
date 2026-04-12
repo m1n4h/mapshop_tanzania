@@ -30,7 +30,7 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('phone_number', 'address')
         }),
         ('Location', {
-            'fields': ('latitude', 'longitude')
+            'fields': ('location',)
         }),
         ('Account Type', {
             'fields': ('user_type', 'is_verified')
@@ -83,7 +83,7 @@ class ShopAdmin(admin.ModelAdmin):
             'fields': ('phone_number', 'email', 'address')
         }),
         ('Location', {
-            'fields': ('latitude', 'longitude')
+            'fields': ('location',)
         }),
         ('Business Hours', {
             'fields': ('opening_time', 'closing_time', 'is_open')

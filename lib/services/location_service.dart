@@ -48,6 +48,20 @@ class LocationService {
     return '$lat, $lng';
   }
 
+  static String formatDuration(double distanceKm) {
+    // Assume average speed of 15 km/h for delivery
+    const double averageSpeedKmh = 15.0;
+    final double timeHours = distanceKm / averageSpeedKmh;
+    final int hours = timeHours.floor();
+    final int minutes = ((timeHours - hours) * 60).round();
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
   double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
     return Geolocator.distanceBetween(lat1, lng1, lat2, lng2) / 1000; // Convert to km
   }
