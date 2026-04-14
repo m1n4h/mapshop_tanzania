@@ -380,25 +380,54 @@ class CreateProductMutation(graphene.Mutation):
     def mutate(self, info, category_id, name, description, price, stock, unit, shop_id=None):
         user = info.context.user
         try:
+            # Only SELLER and ADMIN users can create products
+            if user.user_type not in ['SELLER', 'ADMIN']:
+                return CreateProductMutation(success=False, message="Only sellers and admins can create products")
+            
+            # Get or validate shop
+            shop = None
             if shop_id is not None:
                 shop = Shop.objects.get(id=shop_id)
-            elif user.user_type == 'SELLER' and user.shops.exists():
-                shop = user.shops.first()
-            else:
-                return CreateProductMutation(success=False, message="Shop id required")
+                # Verify permission
+                if shop.seller != user and user.user_type != 'ADMIN':
+                    return CreateProductMutation(success=False, message="You don't have permission to add products to this shop")
+            elif user.user_type == 'SELLER':
+                # For sellers, get their first shop
+                if user.shops.exists():
+                    shop = user.shops.first()
+                else:
+                    return CreateProductMutation(success=False, message="You need to create a shop first. Please go to Shop settings.")
+            elif user.user_type == 'ADMIN':
+                # Admin can create for any shop or we need a shop_id
+                return CreateProductMutation(success=False, message="Admin must specify shop_id")
 
-            if shop.seller != user and user.user_type != 'ADMIN':
-                return CreateProductMutation(success=False, message="Permission denied")
+            if not shop:
+                return CreateProductMutation(success=False, message="Shop not found")
             
-            category = Category.objects.get(id=category_id)
-            product = Product.objects.create(shop=shop, category=category, name=name, description=description, price=price, stock=stock, unit=unit)
+            # Verify category exists
+            try:
+                category = Category.objects.get(id=category_id)
+            except Category.DoesNotExist:
+                return CreateProductMutation(success=False, message=f"Category with id {category_id} not found")
+            
+            # Create product with slug
+            slug = f"{name.lower().replace(' ', '-')}-{shop.id}-{int(timezone.now().timestamp())}"
+            product = Product.objects.create(
+                shop=shop, 
+                category=category, 
+                name=name, 
+                description=description, 
+                price=price, 
+                stock=stock, 
+                unit=unit,
+                slug=slug,
+                is_active=True
+            )
             return CreateProductMutation(success=True, message="Product created successfully", product=product)
         except Shop.DoesNotExist:
-            return CreateProductMutation(success=False, message="Shop not found")
-        except Category.DoesNotExist:
-            return CreateProductMutation(success=False, message="Category not found")
+            return CreateProductMutation(success=False, message=f"Shop with id {shop_id} not found")
         except Exception as e:
-            return CreateProductMutation(success=False, message=str(e))
+            return CreateProductMutation(success=False, message=f"Error creating product: {str(e)}")
 
 class UpdateProductMutation(graphene.Mutation):
     class Arguments:

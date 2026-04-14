@@ -3,6 +3,29 @@ import 'package:mapshop_tanzania/services/graphql_config.dart';
 import 'graphql_queries.dart';
 
 class ProductService {
+  static Future<Map<String, dynamic>> getCategories() async {
+    final client = GraphQLConfig.getClient();
+    
+    final result = await client.query(
+      QueryOptions(
+        document: gql(GraphQLQueries.getCategories),
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+        'categories': []
+      };
+    }
+
+    return {
+      'success': true,
+      'categories': result.data?['categories'] ?? [],
+    };
+  }
+
   static Future<Map<String, dynamic>> getProducts({
     String? search,
     String? category,

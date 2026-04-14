@@ -3,10 +3,12 @@ import '../services/product_service.dart';
 
 class ProductProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
   String? _errorMessage;
 
   List<Map<String, dynamic>> get products => _products;
+  List<Map<String, dynamic>> get categories => _categories;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -32,6 +34,17 @@ class ProductProvider extends ChangeNotifier {
     }
     
     _setLoading(false);
+  }
+
+  Future<void> fetchCategories() async {
+    final result = await ProductService.getCategories();
+    
+    if (result['success']) {
+      _categories = List<Map<String, dynamic>>.from(result['categories']);
+    } else {
+      _errorMessage = result['message'];
+    }
+    notifyListeners();
   }
 
   Future<bool> createProduct({

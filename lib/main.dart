@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/provider/auth_provider.dart';
 import 'package:mapshop_tanzania/provider/chart_provider.dart';
@@ -32,6 +31,7 @@ import 'screens/profile_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/seller_inventory_screen.dart';
+import 'screens/create_shop_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/rider_delivery_screen.dart';
 import 'screens/alerts_dashboard_screen.dart';
@@ -89,6 +89,7 @@ class MyApp extends StatelessWidget {
               '/orders': (context) => const OrdersScreen(),
               '/cart': (context) => const CartScreen(),
               '/seller_inventory': (context) => const SellerInventoryScreen(),
+              '/create_shop': (context) => const CreateShopScreen(),
               '/admin_dashboard': (context) => const AdminDashboardScreen(),
               '/rider_delivery': (context) => const RiderDeliveryScreen(),
               '/alerts_dashboard': (context) => const AlertsDashboardScreen(),

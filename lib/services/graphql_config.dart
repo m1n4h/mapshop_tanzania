@@ -15,7 +15,7 @@ class GraphQLConfig {
     return AuthLink(
       getToken: () async {
         final token = await _storage.read(key: 'access_token');
-        return token != null ? 'Bearer $token' : null;
+        return token != null ? 'JWT $token' : null;
       },
     );
   }

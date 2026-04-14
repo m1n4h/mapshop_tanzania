@@ -1,4 +1,17 @@
 class GraphQLQueries {
+  // Categories
+  static const String getCategories = '''
+    query GetCategories {
+      categories {
+        id
+        name
+        description
+        slug
+        icon
+      }
+    }
+  ''';
+
   // Product Queries
   static const String getProducts = '''
     query GetProducts(\$search: String, \$category: String, \$minPrice: Float, \$maxPrice: Float) {
@@ -51,6 +64,25 @@ class GraphQLQueries {
         deliveryFee
         distance
         logo
+      }
+    }
+  ''';
+
+  static const String getMyShops = '''
+    query GetMyShops {
+      myShops {
+        id
+        name
+        description
+        address
+        latitude
+        longitude
+        rating
+        isOpen
+        deliveryFee
+        logo
+        phoneNumber
+        email
       }
     }
   ''';
@@ -131,6 +163,10 @@ class GraphQLQueries {
         finalPrice
         stock
         unit
+        isActive
+        viewsCount
+        ordersCount
+        rating
         images {
           id
           image
@@ -150,8 +186,8 @@ class GraphQLQueries {
           id
           name
         }
-        rating
-        ordersCount
+        createdAt
+        updatedAt
       }
     }
   ''';
@@ -186,8 +222,20 @@ class GraphQLMutations {
         product {
           id
           name
+          description
           price
+          discountPrice
+          finalPrice
           stock
+          unit
+          category {
+            id
+            name
+          }
+          shop {
+            id
+            name
+          }
         }
       }
     }
@@ -201,8 +249,20 @@ class GraphQLMutations {
         product {
           id
           name
+          description
           price
+          discountPrice
+          finalPrice
           stock
+          unit
+          category {
+            id
+            name
+          }
+          shop {
+            id
+            name
+          }
         }
       }
     }
@@ -267,6 +327,27 @@ class GraphQLMutations {
   ''';
 
   // Shop Mutations
+  static const String createShop = '''
+    mutation CreateShop(\$name: String!, \$description: String!, \$latitude: Float!, \$longitude: Float!, \$address: String!, \$phoneNumber: String!, \$email: String!) {
+      createShop(name: \$name, description: \$description, latitude: \$latitude, longitude: \$longitude, address: \$address, phoneNumber: \$phoneNumber, email: \$email) {
+        success
+        message
+        shop {
+          id
+          name
+          description
+          address
+          latitude
+          longitude
+          phoneNumber
+          email
+          rating
+          isOpen
+        }
+      }
+    }
+  ''';
+
   static const String updateShopLocation = '''
     mutation UpdateShopLocation(\$shopId: Int!, \$latitude: Float!, \$longitude: Float!, \$address: String!) {
       updateShopLocation(shopId: \$shopId, latitude: \$latitude, longitude: \$longitude, address: \$address) {

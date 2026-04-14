@@ -3,6 +3,66 @@ import 'package:mapshop_tanzania/services/graphql_config.dart';
 import 'graphql_queries.dart';
 
 class ShopService {
+  static Future<Map<String, dynamic>> createShop({
+    required String name,
+    required String description,
+    required double latitude,
+    required double longitude,
+    required String address,
+    required String phoneNumber,
+    required String email,
+  }) async {
+    final client = GraphQLConfig.getClient();
+    
+    final result = await client.mutate(
+      MutationOptions(
+        document: gql(GraphQLMutations.createShop),
+        variables: {
+          'name': name,
+          'description': description,
+          'latitude': latitude,
+          'longitude': longitude,
+          'address': address,
+          'phoneNumber': phoneNumber,
+          'email': email,
+        },
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+      };
+    }
+
+    return result.data?['createShop'] ?? {'success': false, 'message': 'Shop creation failed'};
+  }
+
+  static Future<Map<String, dynamic>> getMyShops() async {
+    final client = GraphQLConfig.getClient();
+    
+    final result = await client.query(
+      QueryOptions(
+        document: gql(GraphQLQueries.getMyShops),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+        'shops': []
+      };
+    }
+
+    return {
+      'success': true,
+      'shops': result.data?['myShops'] ?? [],
+    };
+  }
+
   static Future<Map<String, dynamic>> getNearbyShops({
     required double lat,
     required double lng,

@@ -28,6 +28,7 @@ class Query(graphene.ObjectType):
                                 lat=graphene.Float(required=True), 
                                 lng=graphene.Float(required=True), 
                                 radius=graphene.Float(default_value=5))
+    my_shops = graphene.List(ShopType)
     
     # ==================== Product Queries ====================
     products = graphene.List(ProductType,
@@ -119,6 +120,13 @@ class Query(graphene.ObjectType):
                 shop.distance = distance
                 nearby.append(shop)
         return sorted(nearby, key=lambda x: x.distance)
+    
+    @login_required
+    def resolve_my_shops(self, info):
+        user = info.context.user
+        if user.user_type == 'SELLER':
+            return Shop.objects.filter(seller=user)
+        return Shop.objects.none()
     
     def resolve_products(self, info, category=None, shop_id=None, search=None, min_price=None, max_price=None):
         queryset = Product.objects.filter(is_active=True)

@@ -129,7 +129,7 @@ class OrderType(DjangoObjectType):
     
     def resolve_rider_name(self, info):
         return self.rider.email if self.rider else None
-    
+
     def resolve_items(self, info):
         return self.items.all()
     

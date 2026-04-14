@@ -7,6 +7,7 @@ import '../theme/theme_provider.dart';
 import '../provider/product_provider.dart';
 import '../provider/auth_provider.dart';
 import '../services/location_service.dart';
+import '../services/shop_service.dart';
 
 class SellerInventoryScreen extends StatefulWidget {
   const SellerInventoryScreen({super.key});
@@ -38,6 +39,14 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     await productProvider.fetchSellerProducts();
     if (!mounted) return;
+
+    // Load shops
+    final shopResult = await ShopService.getMyShops();
+    if (shopResult['success']) {
+      setState(() {
+        _shops = List<Map<String, dynamic>>.from(shopResult['shops']);
+      });
+    }
 
     setState(() {
       _products = productProvider.products.map((productMap) {
@@ -87,6 +96,8 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     ),
   ];
 
+  List<Map<String, dynamic>> _shops = [];
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -101,6 +112,15 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               Navigator.pushNamed(context, '/alerts_dashboard');
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.storefront),
+            tooltip: 'Create Shop',
+            onPressed: () {
+              Navigator.pushNamed(context, '/create_shop').then((_) {
+                if (mounted) _loadSellerData();
+              });
             },
           ),
           IconButton(
@@ -124,8 +144,9 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
         ],
       ),
       body: _selectedIndex == 0 ? _buildDashboard() : 
-             _selectedIndex == 1 ? _buildMyProducts() :
-             _selectedIndex == 2 ? _buildOrders() :
+             _selectedIndex == 1 ? _buildMyShops() :
+             _selectedIndex == 2 ? _buildMyProducts() :
+             _selectedIndex == 3 ? _buildOrders() :
              _buildProfileSettings(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -141,8 +162,12 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.store),
+            label: 'My Shops',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.inventory),
-            label: 'My Products',
+            label: 'Products',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt),
@@ -736,6 +761,222 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMyShops() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'My Shops (${_shops.length})',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/create_shop').then((_) {
+                        if (mounted) _loadSellerData();
+                      });
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Create Shop'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _shops.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.store,
+                        size: 64,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No shops yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Create your first shop to start selling',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/create_shop').then((_) {
+                            if (mounted) _loadSellerData();
+                          });
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Shop'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).primaryColor,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _shops.length,
+                  itemBuilder: (context, index) {
+                    final shop = _shops[index];
+                    return _buildShopCard(shop);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShopCard(Map<String, dynamic> shop) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.store,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shop['name'] ?? 'Unnamed Shop',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        shop['address'] ?? 'No address',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (shop['isOpen'] ?? false) ? Colors.green.withAlpha(26) : Colors.red.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    (shop['isOpen'] ?? false) ? 'Open' : 'Closed',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: (shop['isOpen'] ?? false) ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.star, color: Colors.amber, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  '${shop['rating']?.toStringAsFixed(1) ?? '0.0'}',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(width: 16),
+                Icon(Icons.location_on, color: Colors.grey.shade600, size: 16),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '${shop['latitude']?.toStringAsFixed(4) ?? '0.0000'}, ${shop['longitude']?.toStringAsFixed(4) ?? '0.0000'}',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Navigate to add product for this shop
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AddProductScreen(shopId: shop['id']),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Product'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () {
+                    // TODO: Navigate to shop details/edit
+                  },
+                  icon: const Icon(Icons.edit, color: Colors.blue),
+                  tooltip: 'Edit Shop',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
