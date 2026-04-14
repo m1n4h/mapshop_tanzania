@@ -221,7 +221,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Serengeti Flux',
+                  'MapShopTanzania',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -239,7 +239,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Precise GPS coordinates link your stock to the free map.',
+                  'Precise GPS coordinates link your stock to the  map.',
                   style: TextStyle(
                     color: Colors.white.withAlpha(230),
                     fontSize: 13,
