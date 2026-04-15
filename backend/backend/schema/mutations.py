@@ -1,3 +1,4 @@
+import datetime
 import graphene
 import random
 import re
@@ -304,6 +305,8 @@ class CreateShopMutation(graphene.Mutation):
         address = graphene.String(required=True)
         phone_number = graphene.String(required=True)
         email = graphene.String(required=True)
+        opening_time = graphene.String()
+        closing_time = graphene.String()
     
     success = graphene.Boolean()
     message = graphene.String()
@@ -318,6 +321,25 @@ class CreateShopMutation(graphene.Mutation):
         latitude = kwargs.pop('latitude')
         longitude = kwargs.pop('longitude')
         location = Point(longitude, latitude)
+
+        opening_time = kwargs.pop('opening_time', None)
+        closing_time = kwargs.pop('closing_time', None)
+        if opening_time:
+            try:
+                kwargs['opening_time'] = datetime.time.fromisoformat(opening_time)
+            except ValueError:
+                return CreateShopMutation(success=False, message='opening_time must be in HH:MM format')
+        else:
+            kwargs['opening_time'] = datetime.time(hour=8, minute=0)
+
+        if closing_time:
+            try:
+                kwargs['closing_time'] = datetime.time.fromisoformat(closing_time)
+            except ValueError:
+                return CreateShopMutation(success=False, message='closing_time must be in HH:MM format')
+        else:
+            kwargs['closing_time'] = datetime.time(hour=18, minute=0)
+
         shop = Shop.objects.create(seller=user, location=location, **kwargs)
         return CreateShopMutation(success=True, message="Shop created successfully", shop=shop)
 
@@ -360,7 +382,24 @@ class UpdateShopMutation(graphene.Mutation):
             return UpdateShopMutation(success=True, message="Shop updated successfully", shop=shop)
         except Shop.DoesNotExist:
             return UpdateShopMutation(success=False, message="Shop not found")
-
+class DeleteShopMutation(graphene.Mutation):
+    class Arguments:
+        shop_id = graphene.Int(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, shop_id):
+        try:
+            shop = Shop.objects.get(id=shop_id)
+            if shop.seller != info.context.user and info.context.user.user_type != 'ADMIN':
+                return DeleteShopMutation(success=False, message="Permission denied")
+            
+            shop.delete()
+            return DeleteShopMutation(success=True, message="Shop deleted successfully")
+        except Shop.DoesNotExist:
+            return DeleteShopMutation(success=False, message="Shop not found")
 # ==================== Product Mutations ====================
 class CreateProductMutation(graphene.Mutation):
     class Arguments:
@@ -591,6 +630,7 @@ class Mutation(graphene.ObjectType):
     # Shop
     create_shop = CreateShopMutation.Field()
     update_shop = UpdateShopMutation.Field()
+    delete_shop = DeleteShopMutation.Field()
     
     # Product
     create_product = CreateProductMutation.Field()

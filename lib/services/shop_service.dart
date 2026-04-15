@@ -11,6 +11,8 @@ class ShopService {
     required String address,
     required String phoneNumber,
     required String email,
+    String? openingTime,
+    String? closingTime,
   }) async {
     final client = GraphQLConfig.getClient();
     
@@ -25,6 +27,8 @@ class ShopService {
           'address': address,
           'phoneNumber': phoneNumber,
           'email': email,
+          'openingTime': openingTime,
+          'closingTime': closingTime,
         },
       ),
     );
@@ -93,6 +97,66 @@ class ShopService {
       'success': true,
       'shops': result.data?['nearbyShops'] ?? [],
     };
+  }
+
+  static Future<Map<String, dynamic>> updateShop({
+    required int shopId,
+    String? name,
+    String? description,
+    double? latitude,
+    double? longitude,
+    String? address,
+    String? phoneNumber,
+    String? email,
+    bool? isOpen,
+  }) async {
+    final client = GraphQLConfig.getClient();
+    final variables = <String, dynamic>{'shopId': shopId};
+    
+    if (name != null) variables['name'] = name;
+    if (description != null) variables['description'] = description;
+    if (latitude != null) variables['latitude'] = latitude;
+    if (longitude != null) variables['longitude'] = longitude;
+    if (address != null) variables['address'] = address;
+    if (phoneNumber != null) variables['phoneNumber'] = phoneNumber;
+    if (email != null) variables['email'] = email;
+    if (isOpen != null) variables['isOpen'] = isOpen;
+
+    final result = await client.mutate(
+      MutationOptions(
+        document: gql(GraphQLMutations.updateShop),
+        variables: variables,
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+      };
+    }
+
+    return result.data?['updateShop'] ?? {'success': false, 'message': 'Update failed'};
+  }
+
+  static Future<Map<String, dynamic>> deleteShop(int shopId) async {
+    final client = GraphQLConfig.getClient();
+    
+    final result = await client.mutate(
+      MutationOptions(
+        document: gql(GraphQLMutations.deleteShop),
+        variables: {'shopId': shopId},
+      ),
+    );
+
+    if (result.hasException) {
+      return {
+        'success': false,
+        'message': result.exception.toString(),
+      };
+    }
+
+    return result.data?['deleteShop'] ?? {'success': false, 'message': 'Deletion failed'};
   }
 
   static Future<Map<String, dynamic>> updateShopLocation({

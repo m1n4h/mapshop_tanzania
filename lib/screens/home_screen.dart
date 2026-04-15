@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // GraphQL Queries
   static const String shopsQuery = '''
-    query GetNearbyShops(\$lat: Float!, \$lng: Float!, \$radius: Float, \$search: String) {
+    query GetNearbyShops(\$lat: Float!, \$lng: Float!, \$radius: Float) {
       nearbyShops(lat: \$lat, lng: \$lng, radius: \$radius) {
         id
         name
@@ -310,6 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : _selectedIndex == 1
               ? _buildDiscoverTab()
               : _buildProfileTab(),
+              
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
@@ -329,11 +330,18 @@ class _HomeScreenState extends State<HomeScreen> {
             activeIcon: Icon(Icons.explore),
             label: 'Discover',
           ),
-          BottomNavigationBarItem(
+         
+           BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'rider',
+          ),
+           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
             label: 'Profile',
           ),
+
         ],
       ),
     );
@@ -947,7 +955,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text('Sign Out'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: BorderSide(color: Colors.red.shade300),
+                      side: BorderSide(color: Colors.white),
                       foregroundColor: Colors.red,
                     ),
                   ),

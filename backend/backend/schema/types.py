@@ -47,6 +47,7 @@ class ShopType(DjangoObjectType):
     hours = graphene.List(ShopHoursType)
     latitude = graphene.Float()
     longitude = graphene.Float()
+    delivery_fee = graphene.Float()
 
     class Meta:
         model = Shop
@@ -61,6 +62,9 @@ class ShopType(DjangoObjectType):
     def resolve_longitude(self, info):
         return self.location.x if self.location else None
 
+    def resolve_delivery_fee(self, info):
+        return float(getattr(self, 'delivery_fee', 1500.0))
+
 # ==================== Product Types ====================
 class CategoryType(DjangoObjectType):
     class Meta:
@@ -73,6 +77,8 @@ class ProductImageType(DjangoObjectType):
         fields = '__all__'
 
 class ProductType(DjangoObjectType):
+    price = graphene.Float()
+    discount_price = graphene.Float()
     final_price = graphene.Float()
     category_name = graphene.String()
     shop_name = graphene.String()
@@ -80,6 +86,12 @@ class ProductType(DjangoObjectType):
     class Meta:
         model = Product
         fields = '__all__'
+    
+    def resolve_price(self, info):
+        return float(self.price)
+    
+    def resolve_discount_price(self, info):
+        return float(self.discount_price) if self.discount_price is not None else None
     
     def resolve_final_price(self, info):
         return float(self.discount_price) if self.discount_price else float(self.price)

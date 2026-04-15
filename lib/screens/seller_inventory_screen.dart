@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/screens/add_product_screen.dart';
 import 'package:mapshop_tanzania/screens/edit_product_screen.dart';
+import 'package:mapshop_tanzania/screens/shop_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../theme/theme_provider.dart';
@@ -50,12 +51,14 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
 
     setState(() {
       _products = productProvider.products.map((productMap) {
+        final productId = productMap['id'];
+        final parsedId = productId is int ? productId : (productId != null ? int.tryParse(productId.toString()) : null);
         return Product(
-          id: productMap['id'] as int?,
+          id: parsedId,
           name: productMap['name'] as String? ?? 'Unnamed product',
           price: ((productMap['price'] ?? 0) as num).toInt(),
           unit: productMap['unit'] as String? ?? 'unit',
-          stock: (productMap['stock'] ?? 0) as int,
+          stock: ((productMap['stock'] ?? 0) as num).toInt(),
           category: productMap['category'] != null ? (productMap['category']['name'] as String? ?? 'Unknown') : 'Unknown',
           imageUrl: productMap['images'] != null && (productMap['images'] as List).isNotEmpty
               ? productMap['images'][0]['image'] as String
@@ -519,12 +522,14 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                   setState(() {
                     if (product.id != null) {
                       _products = productProvider.products.map((productMap) {
+                        final productId = productMap['id'];
+                        final parsedId = productId is int ? productId : (productId != null ? int.tryParse(productId.toString()) : null);
                         return Product(
-                          id: productMap['id'] as int?,
+                          id: parsedId,
                           name: productMap['name'] as String? ?? 'Unnamed product',
                           price: ((productMap['price'] ?? 0) as num).toInt(),
                           unit: productMap['unit'] as String? ?? 'unit',
-                          stock: (productMap['stock'] ?? 0) as int,
+                          stock: ((productMap['stock'] ?? 0) as num).toInt(),
                           category: productMap['category'] != null ? (productMap['category']['name'] as String? ?? 'Unknown') : 'Unknown',
                           imageUrl: productMap['images'] != null && (productMap['images'] as List).isNotEmpty
                               ? productMap['images'][0]['image'] as String
@@ -823,22 +828,22 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/create_shop').then((_) {
-                            if (mounted) _loadSellerData();
-                          });
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create Shop'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                        ),
-                      ),
+                      // ElevatedButton.icon(
+                      //   onPressed: () {
+                      //     Navigator.pushNamed(context, '/create_shop').then((_) {
+                      //       if (mounted) _loadSellerData();
+                      //     });
+                      //   },
+                      //   icon: const Icon(Icons.add),
+                      //   label: const Text('Create Shop'),
+                      //   style: ElevatedButton.styleFrom(
+                      //     backgroundColor: Theme.of(context).primaryColor,
+                      //     padding: const EdgeInsets.symmetric(
+                      //       horizontal: 24,
+                      //       vertical: 12,
+                      //     ),
+                      //   ),
+                      // ),
                     ],
                   ),
                 )
@@ -923,7 +928,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.star, color: Colors.amber, size: 16),
+                const Icon(Icons.star, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
                 Text(
                   '${shop['rating']?.toStringAsFixed(1) ?? '0.0'}',
@@ -950,10 +955,12 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       // Navigate to add product for this shop
+                      final shopId = shop['id'];
+                      final parsedShopId = shopId is int ? shopId : int.parse(shopId.toString());
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AddProductScreen(shopId: shop['id']),
+                          builder: (context) => AddProductScreen(shopId: parsedShopId),
                         ),
                       );
                     },
@@ -968,7 +975,16 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   onPressed: () {
-                    // TODO: Navigate to shop details/edit
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ShopDetailsScreen(shop: shop),
+                      ),
+                    ).then((result) {
+                      if (result == true && mounted) {
+                        _loadSellerData();
+                      }
+                    });
                   },
                   icon: const Icon(Icons.edit, color: Colors.blue),
                   tooltip: 'Edit Shop',

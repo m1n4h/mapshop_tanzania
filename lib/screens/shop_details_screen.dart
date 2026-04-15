@@ -2,26 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:mapshop_tanzania/services/location_service.dart';
 import 'package:mapshop_tanzania/services/shop_service.dart';
 
-class CreateShopScreen extends StatefulWidget {
-  const CreateShopScreen({super.key});
+class ShopDetailsScreen extends StatefulWidget {
+  final Map<String, dynamic> shop;
+
+  const ShopDetailsScreen({
+    super.key,
+    required this.shop,
+  });
 
   @override
-  State<CreateShopScreen> createState() => _CreateShopScreenState();
+  State<ShopDetailsScreen> createState() => _ShopDetailsScreenState();
 }
 
-class _CreateShopScreenState extends State<CreateShopScreen> {
+class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
-  double? _latitude;
-  double? _longitude;
-  TimeOfDay _openingTime = const TimeOfDay(hour: 8, minute: 0);
-  TimeOfDay _closingTime = const TimeOfDay(hour: 18, minute: 0);
+  late TextEditingController _nameController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _addressController;
+  late TextEditingController _phoneController;
+  late TextEditingController _emailController;
+  late double _latitude;
+  late double _longitude;
   bool _isSubmitting = false;
   bool _isLoadingLocation = false;
+  late bool _isOpen;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.shop['name'] ?? '');
+    _descriptionController = TextEditingController(text: widget.shop['description'] ?? '');
+    _addressController = TextEditingController(text: widget.shop['address'] ?? '');
+    _phoneController = TextEditingController(text: widget.shop['phoneNumber'] ?? '');
+    _emailController = TextEditingController(text: widget.shop['email'] ?? '');
+    _latitude = (widget.shop['latitude'] as num?)?.toDouble() ?? 0.0;
+    _longitude = (widget.shop['longitude'] as num?)?.toDouble() ?? 0.0;
+    _isOpen = widget.shop['isOpen'] ?? true;
+  }
 
   @override
   void dispose() {
@@ -37,9 +54,16 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Shop'),
+        title: const Text('Shop Details'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: _showDeleteConfirmation,
+            tooltip: 'Delete Shop',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -53,7 +77,7 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  hintText: 'e.g., My Local Shop',
+                  hintText: 'e.g., My Shop',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
@@ -111,55 +135,13 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              const Text('Opening Hours', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await _pickTime(context, _openingTime);
-                        if (picked != null) {
-                          setState(() => _openingTime = picked);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Opens at',
-                          border: OutlineInputBorder(),
-                        ),
-                        child: Text(_formatTimeOfDay(_openingTime)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await _pickTime(context, _closingTime);
-                        if (picked != null) {
-                          setState(() => _closingTime = picked);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Closes at',
-                          border: OutlineInputBorder(),
-                        ),
-                        child: Text(_formatTimeOfDay(_closingTime)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _isLoadingLocation ? null : _fillLocation,
                       icon: const Icon(Icons.my_location),
-                      label: Text(_isLoadingLocation ? 'Finding location...' : 'Use Current Location'),
+                      label: Text(_isLoadingLocation ? 'Finding location...' : 'Update Location'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).primaryColor,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -168,25 +150,37 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-              if (_latitude != null && _longitude != null)
-                Text('Location: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}'),
-              if (_latitude == null || _longitude == null)
-                const Text('Location not set. Use current location or fill manually.'),
+              Text('Location: ${_latitude.toStringAsFixed(5)}, ${_longitude.toStringAsFixed(5)}'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('Shop Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: SwitchListTile(
+                      value: _isOpen,
+                      onChanged: (value) {
+                        setState(() => _isOpen = value);
+                      },
+                      title: Text(_isOpen ? 'Open' : 'Closed'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitShop,
+                  onPressed: _isSubmitting ? null : _submitUpdate,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Create Shop', style: TextStyle(fontSize: 16, color: Colors.white)),
+                      : const Text('Save Changes', style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
             ],
@@ -197,7 +191,6 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
   }
 
   Future<void> _fillLocation() async {
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isLoadingLocation = true);
     final position = await LocationService().getCurrentLocation();
     setState(() => _isLoadingLocation = false);
@@ -207,59 +200,40 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
         _latitude = position.latitude;
         _longitude = position.longitude;
       });
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Location saved successfully'), backgroundColor: Colors.green),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location updated'),
+          backgroundColor: Colors.green,
+        ),
       );
     } else {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Unable to get location. Check permissions.'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  Future<TimeOfDay?> _pickTime(BuildContext context, TimeOfDay initialTime) async {
-    return showTimePicker(
-      context: context,
-      initialTime: initialTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            timePickerTheme: TimePickerThemeData(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-  }
-
-  String _formatTimeOfDay(TimeOfDay time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
-
-  Future<void> _submitShop() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_latitude == null || _longitude == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide your current location'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Unable to get location'),
+          backgroundColor: Colors.red,
+        ),
       );
-      return;
     }
+  }
+
+  Future<void> _submitUpdate() async {
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
-    final result = await ShopService.createShop(
+    final shopId = widget.shop['id'];
+    final parsedShopId = shopId is int ? shopId : int.parse(shopId.toString());
+    final result = await ShopService.updateShop(
+      shopId: parsedShopId,
       name: _nameController.text,
       description: _descriptionController.text,
-      latitude: _latitude!,
-      longitude: _longitude!,
+      latitude: _latitude,
+      longitude: _longitude,
       address: _addressController.text,
       phoneNumber: _phoneController.text,
       email: _emailController.text,
-      openingTime: _formatTimeOfDay(_openingTime),
-      closingTime: _formatTimeOfDay(_closingTime),
+      isOpen: _isOpen,
     );
     setState(() => _isSubmitting = false);
 
@@ -268,12 +242,71 @@ class _CreateShopScreenState extends State<CreateShopScreen> {
 
     if (result['success']) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Shop created successfully!'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('Shop updated successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
       Navigator.pop(context, true);
     } else {
       messenger.showSnackBar(
-        SnackBar(content: Text(result['message'] ?? 'Failed to create shop'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(result['message'] ?? 'Failed to update shop'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Shop'),
+          content: const Text('Are you sure you want to delete this shop? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteShop();
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteShop() async {
+    setState(() => _isSubmitting = true);
+    final shopId = widget.shop['id'];
+    final parsedShopId = shopId is int ? shopId : int.parse(shopId.toString());
+    final result = await ShopService.deleteShop(parsedShopId);
+    setState(() => _isSubmitting = false);
+
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (result['success']) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Shop deleted successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Failed to delete shop'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

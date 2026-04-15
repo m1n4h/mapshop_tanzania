@@ -124,7 +124,7 @@ class ProfileScreen extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   side: BorderSide(color: Colors.white),
-                  foregroundColor: Colors.red,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ),

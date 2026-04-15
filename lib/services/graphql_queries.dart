@@ -328,8 +328,8 @@ class GraphQLMutations {
 
   // Shop Mutations
   static const String createShop = '''
-    mutation CreateShop(\$name: String!, \$description: String!, \$latitude: Float!, \$longitude: Float!, \$address: String!, \$phoneNumber: String!, \$email: String!) {
-      createShop(name: \$name, description: \$description, latitude: \$latitude, longitude: \$longitude, address: \$address, phoneNumber: \$phoneNumber, email: \$email) {
+    mutation CreateShop(\$name: String!, \$description: String!, \$latitude: Float!, \$longitude: Float!, \$address: String!, \$phoneNumber: String!, \$email: String!, \$openingTime: String, \$closingTime: String) {
+      createShop(name: \$name, description: \$description, latitude: \$latitude, longitude: \$longitude, address: \$address, phoneNumber: \$phoneNumber, email: \$email, openingTime: \$openingTime, closingTime: \$closingTime) {
         success
         message
         shop {
@@ -360,6 +360,35 @@ class GraphQLMutations {
           longitude
           address
         }
+      }
+    }
+  ''';
+
+  static const String updateShop = '''
+    mutation UpdateShop(\$shopId: Int!, \$name: String, \$description: String, \$latitude: Float, \$longitude: Float, \$address: String, \$phoneNumber: String, \$email: String, \$isOpen: Boolean) {
+      updateShop(shopId: \$shopId, name: \$name, description: \$description, latitude: \$latitude, longitude: \$longitude, address: \$address, phoneNumber: \$phoneNumber, email: \$email, isOpen: \$isOpen) {
+        success
+        message
+        shop {
+          id
+          name
+          description
+          address
+          latitude
+          longitude
+          phoneNumber
+          email
+          isOpen
+        }
+      }
+    }
+  ''';
+
+  static const String deleteShop = '''
+    mutation DeleteShop(\$shopId: Int!) {
+      deleteShop(shopId: \$shopId) {
+        success
+        message
       }
     }
   ''';

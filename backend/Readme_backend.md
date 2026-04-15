@@ -77,3 +77,5 @@ GDAL 3.8.4, released 2024/02/08
 )
 -django redis
 
+pip install django-redis
+pip install drf-spectacular
