@@ -52,3 +52,7 @@ __pycache__/
 .env
 .db.sqlite3
 *.log
+
+/secrete
+
+
