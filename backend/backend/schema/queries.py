@@ -92,15 +92,22 @@ class Query(graphene.ObjectType):
             )
         
         # Calculate distance if coordinates provided
-        if lat and lng:
-            import math
+        if lat is not None and lng is not None:
+            shops_with_distance = []
             for shop in queryset:
-                distance = self.calculate_distance(lat, lng, shop.latitude, shop.longitude)
-                shop.distance = distance
+                if shop.location is None:
+                    continue
+                try:
+                    distance = Query.calculate_distance(lat, lng, shop.location.y, shop.location.x)
+                    shop.distance = distance
+                    shops_with_distance.append(shop)
+                except (TypeError, ValueError):
+                    continue
             
             if radius:
-                queryset = [shop for shop in queryset if shop.distance <= radius]
-                queryset = sorted(queryset, key=lambda x: x.distance)
+                shops_with_distance = [shop for shop in shops_with_distance if shop.distance <= radius]
+            
+            queryset = sorted(shops_with_distance, key=lambda x: x.distance)
         
         return queryset
     
@@ -111,14 +118,20 @@ class Query(graphene.ObjectType):
             return None
     
     def resolve_nearby_shops(self, info, lat, lng, radius=5):
+        if lat is None or lng is None:
+            return []
         shops = Shop.objects.filter(status='ACTIVE')
-        import math
         nearby = []
         for shop in shops:
-            distance = self.calculate_distance(lat, lng, shop.latitude, shop.longitude)
-            if distance <= radius:
-                shop.distance = distance
-                nearby.append(shop)
+            if shop.location is None:
+                continue
+            try:
+                distance = Query.calculate_distance(lat, lng, shop.location.y, shop.location.x)
+                if distance <= radius:
+                    shop.distance = distance
+                    nearby.append(shop)
+            except (TypeError, ValueError):
+                continue
         return sorted(nearby, key=lambda x: x.distance)
     
     @login_required
@@ -268,6 +281,8 @@ class Query(graphene.ObjectType):
             return Product.objects.filter(is_active=True)
         return Product.objects.none()
     
+   
+   
     def calculate_distance(self, lat1, lon1, lat2, lon2):
         import math
         R = 6371

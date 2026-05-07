@@ -22,17 +22,26 @@ class ShopListView(generics.ListCreateAPIView):
         radius = float(self.request.query_params.get('radius', 5))  # km
         
         if lat and lng:
-            lat = float(lat)
-            lng = float(lng)
-            
-            # Calculate distance for each shop
-            for shop in queryset:
-                distance = self.calculate_distance(lat, lng, shop.latitude, shop.longitude)
-                shop.distance = distance
-            
-            # Filter by radius
-            queryset = [shop for shop in queryset if shop.distance <= radius]
-            queryset = sorted(queryset, key=lambda x: x.distance)
+            try:
+                lat = float(lat)
+                lng = float(lng)
+                
+                # Calculate distance for each shop with valid coordinates
+                shops_with_distance = []
+                for shop in queryset:
+                    if shop.location is not None:
+                        try:
+                            distance = self.calculate_distance(lat, lng, shop.location.y, shop.location.x)
+                            shop.distance = distance
+                            shops_with_distance.append(shop)
+                        except (TypeError, ValueError):
+                            pass  # Skip shops with invalid coordinates
+                
+                # Filter by radius and sort
+                queryset = [shop for shop in shops_with_distance if shop.distance <= radius]
+                queryset = sorted(queryset, key=lambda x: x.distance)
+            except (TypeError, ValueError):
+                pass  # If coordinates are invalid, return all shops
         
         return queryset
     

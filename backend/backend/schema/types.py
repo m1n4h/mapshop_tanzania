@@ -56,6 +56,9 @@ class ShopType(DjangoObjectType):
     def resolve_hours(self, info):
         return self.hours.all()
 
+    def resolve_distance(self, info):
+        return getattr(self, 'distance', None)
+
     def resolve_latitude(self, info):
         return self.location.y if self.location else None
 

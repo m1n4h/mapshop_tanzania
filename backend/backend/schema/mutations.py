@@ -407,7 +407,7 @@ class CreateProductMutation(graphene.Mutation):
         category_id = graphene.Int(required=True)
         name = graphene.String(required=True)
         description = graphene.String(required=True)
-        price = graphene.Float(required=True)
+        price = graphene.String(required=True)  # Accept as string to preserve decimal precision
         stock = graphene.Int(required=True)
         unit = graphene.String(required=True)
     
@@ -417,11 +417,20 @@ class CreateProductMutation(graphene.Mutation):
     
     @login_required
     def mutate(self, info, category_id, name, description, price, stock, unit, shop_id=None):
+        from decimal import Decimal, InvalidOperation
         user = info.context.user
         try:
             # Only SELLER and ADMIN users can create products
             if user.user_type not in ['SELLER', 'ADMIN']:
                 return CreateProductMutation(success=False, message="Only sellers and admins can create products")
+            
+            # Convert price to Decimal for database
+            try:
+                price_decimal = Decimal(str(price))
+                if price_decimal < 0:
+                    return CreateProductMutation(success=False, message="Price must be a positive number")
+            except (InvalidOperation, TypeError, ValueError):
+                return CreateProductMutation(success=False, message="Invalid price format. Price must be a number.")
             
             # Get or validate shop
             shop = None
@@ -456,7 +465,7 @@ class CreateProductMutation(graphene.Mutation):
                 category=category, 
                 name=name, 
                 description=description, 
-                price=price, 
+                price=price_decimal, 
                 stock=stock, 
                 unit=unit,
                 slug=slug,

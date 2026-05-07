@@ -5,7 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import '../theme/theme_provider.dart';
-import '../provider/auth_provider.dart';
+import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/graphql_config.dart';
 
@@ -24,14 +24,13 @@ class _HomeScreenState extends State<HomeScreen> {
   
   // Location and map state
   Position? _userLocation;
-   GoogleMapController? _mapController;
-  final Set<Marker> _markers = {};
+  GoogleMapController? _mapController;
+  Future<Map<String, dynamic>?>? _userProfileFuture;
   
   final List<String> _categories = ['All', 'Food', 'Electronics', 'Clothing', 'Hardware'];
   
   List<ProductItem> _products = [];
   List<ShopItem> _shops = [];
-  bool _isLoading = true;
 
   // GraphQL Queries
   static const String shopsQuery = '''
@@ -74,7 +73,32 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _userProfileFuture = _loadUserProfile();
     _initializeLocation();
+  }
+
+  Future<Map<String, dynamic>?> _loadUserProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isGuest = prefs.getBool('isGuest') ?? false;
+      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+      if (!isGuest && !isLoggedIn) {
+        return null;
+      }
+
+      final profile = await AuthService.getUserProfile();
+      return {
+        'isGuest': isGuest,
+        'username': profile?['username'] ?? prefs.getString('userName') ?? prefs.getString('user_name') ?? 'Guest User',
+        'email': profile?['email'] ?? prefs.getString('user_email') ?? '',
+        'userType': profile?['userType'] ?? (isGuest ? 'Guest' : 'Buyer'),
+        'profilePicture': profile?['profilePicture'],
+      };
+    } catch (e) {
+      print('Error loading user profile: $e');
+      return null;
+    }
   }
 
   Future<void> _initializeLocation() async {
@@ -106,16 +130,80 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  List<ShopItem> get _filteredShops {
+    final query = _searchController.text.trim().toLowerCase();
+    final filtered = _shops.where((shop) {
+      final matchesSearch = query.isEmpty || shop.name.toLowerCase().contains(query);
+      return matchesSearch;
+    }).toList();
+
+    if (_selectedCategory != 'All') {
+      final shopNamesInCategory = _products
+          .where((product) => product.category.toLowerCase() == _selectedCategory.toLowerCase())
+          .map((product) => product.shopName)
+          .toSet();
+      return _sortShops(filtered.where((shop) => shopNamesInCategory.contains(shop.name)).toList());
+    }
+    return _sortShops(filtered);
+  }
+
+  List<ProductItem> get _filteredProducts {
+    final query = _searchController.text.trim().toLowerCase();
+    final filtered = _products.where((product) {
+      final matchesSearch = query.isEmpty ||
+          product.name.toLowerCase().contains(query) ||
+          product.shopName.toLowerCase().contains(query);
+      final matchesCategory = _selectedCategory == 'All' ||
+          product.category.toLowerCase() == _selectedCategory.toLowerCase();
+      return matchesSearch && matchesCategory;
+    }).toList();
+    return _sortProducts(filtered);
+  }
+
+  Set<Marker> _buildShopMarkers() {
+    return _filteredShops.map((shop) {
+      return Marker(
+        markerId: MarkerId(shop.id.toString()),
+        position: LatLng(shop.latitude, shop.longitude),
+        infoWindow: InfoWindow(
+          title: shop.name,
+          snippet: 'TZS ${shop.deliveryFee} delivery',
+        ),
+      );
+    }).toSet();
+  }
+
+  double _parseDistance(String distance) {
+    return double.tryParse(distance.replaceAll('km', '').trim()) ?? 0.0;
+  }
+
+  List<ShopItem> _sortShops(List<ShopItem> shops) {
+    if (_sortBy == 'Price: Low to High') {
+      shops.sort((a, b) => int.parse(a.deliveryFee).compareTo(int.parse(b.deliveryFee)));
+    } else if (_sortBy == 'Price: High to Low') {
+      shops.sort((a, b) => int.parse(b.deliveryFee).compareTo(int.parse(a.deliveryFee)));
+    } else {
+      shops.sort((a, b) => _parseDistance(a.distance).compareTo(_parseDistance(b.distance)));
+    }
+    return shops;
+  }
+
+  List<ProductItem> _sortProducts(List<ProductItem> products) {
+    if (_sortBy == 'Price: Low to High') {
+      products.sort((a, b) => a.price.compareTo(b.price));
+    } else if (_sortBy == 'Price: High to Low') {
+      products.sort((a, b) => b.price.compareTo(a.price));
+    } else {
+      products.sort((a, b) => _parseDistance(a.distance).compareTo(_parseDistance(b.distance)));
+    }
+    return products;
+  }
+
   Future<void> _fetchShopsAndProducts() async {
     if (_userLocation == null || !mounted) return;
 
     try {
       final client = GraphQLConfig.getClient();
-      
-      // Clear previous markers
-      if (mounted) {
-        setState(() => _markers.clear());
-      }
       
       // Fetch shops
       final shopsResult = await client.query(
@@ -134,7 +222,8 @@ class _HomeScreenState extends State<HomeScreen> {
         QueryOptions(
           document: gql(productsQuery),
           variables: {
-            'search': _searchController.text,
+            'search': _searchController.text.isEmpty ? null : _searchController.text,
+            'category': _selectedCategory == 'All' ? null : _selectedCategory,
           },
         ),
       );
@@ -163,17 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     shopLng,
                   );
                   
-                  _markers.add(
-                    Marker(
-                      markerId: MarkerId(shop['id'].toString()),
-                      position: LatLng(shopLat, shopLng),
-                      infoWindow: InfoWindow(
-                        title: shop['name'] ?? 'Shop',
-                        snippet: 'TZS ${shop['deliveryFee'] ?? 1500} delivery',
-                      ),
-                    ),
-                  );
-
                   return ShopItem(
                     id: shop['id'] ?? 0,
                     name: shop['name'] ?? 'Unknown Shop',
@@ -201,6 +279,11 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           }
         } else {
+          if (mounted) {
+            setState(() {
+              _shops = [];
+            });
+          }
           print('No shops data received');
         }
       }
@@ -237,6 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     distance: '${distance.toStringAsFixed(1)} km',
                     rating: (product['rating'] as num?)?.toDouble() ?? 4.5,
                     isOnline: true,
+                    category: (product['category']?['name'] ?? 'Unknown'),
                     imageUrl: '',
                   );
                 } catch (e) {
@@ -249,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     distance: '0 km',
                     rating: 0,
                     isOnline: false,
+                    category: 'Unknown',
                     imageUrl: '',
                   );
                 }
@@ -256,6 +341,11 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           }
         } else {
+          if (mounted) {
+            setState(() {
+              _products = [];
+            });
+          }
           print('No products data received');
         }
       }
@@ -268,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {});
       }
     }
   }
@@ -314,6 +404,10 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
+          if (index == 2) {
+            Navigator.pushNamed(context, '/rider_delivery');
+            return;
+          }
           setState(() {
             _selectedIndex = index;
           });
@@ -332,9 +426,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
          
            BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'rider',
+            icon: Icon(Icons.delivery_dining_outlined),
+            activeIcon: Icon(Icons.delivery_dining),
+            label: 'Rider',
           ),
            BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -363,18 +457,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     _searchController.clear();
+                    _fetchShopsAndProducts();
                   },
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onSubmitted: (value) {
-                if (value.isNotEmpty) {
-                  setState(() {
-                    _selectedIndex = 1;
-                  });
-                }
+              onSubmitted: (value) async {
+                await _fetchShopsAndProducts();
+                setState(() {
+                  _selectedIndex = 1;
+                });
               },
             ),
           ),
@@ -397,6 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() {
                         _selectedCategory = category;
                       });
+                      _fetchShopsAndProducts();
                     },
                     selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
                     checkmarkColor: Theme.of(context).primaryColor,
@@ -449,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         zoom: 14,
                       ),
                       markers: {
-                        ..._markers,
+                        ..._buildShopMarkers(),
                         Marker(
                           markerId: const MarkerId('user_location'),
                           position: LatLng(
@@ -529,9 +624,9 @@ class _HomeScreenState extends State<HomeScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _shops.length,
+            itemCount: _filteredShops.length,
             itemBuilder: (context, index) {
-              final shop = _shops[index];
+              final shop = _filteredShops[index];
               return _buildShopCard(shop);
             },
           ),
@@ -677,9 +772,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDiscoverTab() {
-    final filteredProducts = _products.where((product) =>
-        _searchController.text.isEmpty ||
-        product.name.toLowerCase().contains(_searchController.text.toLowerCase())).toList();
+    final filteredProducts = _filteredProducts;
     
     return Column(
       children: [
@@ -696,6 +789,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.clear),
                 onPressed: () {
                   _searchController.clear();
+                  _fetchShopsAndProducts();
                   setState(() {});
                 },
               ),
@@ -704,6 +798,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             onChanged: (value) {
+              setState(() {});
+            },
+            onSubmitted: (value) async {
+              await _fetchShopsAndProducts();
               setState(() {});
             },
           ),
@@ -742,6 +840,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const PopupMenuItem(
                     value: 'Price: High to Low',
                     child: Text('Price: High to Low'),
+       /// The above code snippet appears to be written in Dart and it seems to be defining a popup menu
+       /// with two items: "Sort by Name" and "Distance: Nearest". The popup menu is likely intended to
+       /// be used in a user interface for sorting or selecting options. The code is not complete as it
+       /// ends abruptly with "const Si", so it's difficult to provide a complete analysis without the
+       /// full context.
                   ),
                   const PopupMenuItem(
                     value: 'Distance: Nearest',
@@ -858,17 +961,56 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildProfileTab() {
-    return FutureBuilder<SharedPreferences>(
-      future: SharedPreferences.getInstance(),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _userProfileFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
-        
-        final prefs = snapshot.data!;
-        final isGuest = prefs.getBool('isGuest') ?? false;
-        final userName = prefs.getString('userName') ?? 'Guest User';
-        
+
+        final user = snapshot.data;
+        if (user == null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.person_outline, size: 80, color: Colors.grey),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'You are not signed in',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Sign in to access your buyer profile, orders, and preferences.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/signin');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                    ),
+                    child: const Text('Sign In'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final isGuest = user['isGuest'] == true;
+        final userName = user['username'] ?? 'Guest User';
+        final email = user['email'] ?? '';
+        final userType = user['userType'] ?? (isGuest ? 'Guest' : 'Buyer');
+        final profilePicture = user['profilePicture'] as String?;
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -876,40 +1018,43 @@ class _HomeScreenState extends State<HomeScreen> {
               CircleAvatar(
                 radius: 50,
                 backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                child: Icon(
-                  isGuest ? Icons.person_outline : Icons.person,
-                  size: 50,
-                  color: Theme.of(context).primaryColor,
-                ),
+                backgroundImage: profilePicture != null && profilePicture.isNotEmpty
+                    ? NetworkImage(profilePicture) as ImageProvider
+                    : null,
+                child: profilePicture == null || profilePicture.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 50,
+                        color: Theme.of(context).primaryColor,
+                      )
+                    : null,
               ),
               const SizedBox(height: 16),
               Text(
-                isGuest ? 'Habari, Guest!' : 'Habari, $userName!',
+                'Habari, $userName!',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
-              if (isGuest) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Guest Mode',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  userType.toString().toUpperCase(),
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
                 ),
-              ],
+              ),
               const SizedBox(height: 8),
               Text(
-                isGuest ? 'Sign in to access more features' : 'Your purpose is to explore',
+                email.isNotEmpty ? email : 'No email available',
                 style: TextStyle(color: Colors.grey.shade600),
               ),
               const SizedBox(height: 24),
@@ -940,41 +1085,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              if (!isGuest)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool('isLoggedIn', false);
-                      if (context.mounted) {
-                        Navigator.pushReplacementNamed(context, '/signin');
-                      }
-                    },
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign Out'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: BorderSide(color: Colors.white),
-                      foregroundColor: Colors.red,
-                    ),
-                  ),
-                ),
-              if (isGuest)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await AuthService.logout();
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('isLoggedIn', false);
+                    await prefs.setBool('isGuest', false);
+                    if (context.mounted) {
                       Navigator.pushReplacementNamed(context, '/signin');
-                    },
-                    icon: const Icon(Icons.login),
-                    label: const Text('Sign In to Access Full Features'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: Colors.white),
+                    foregroundColor: Colors.red,
                   ),
                 ),
+              ),
             ],
           ),
         );
@@ -1008,6 +1139,7 @@ class ProductItem {
   final String distance;
   final double rating;
   final bool isOnline;
+  final String category;
   final String imageUrl;
 
   ProductItem({
@@ -1018,6 +1150,7 @@ class ProductItem {
     required this.distance,
     required this.rating,
     required this.isOnline,
+    required this.category,
     required this.imageUrl,
   });
 }
